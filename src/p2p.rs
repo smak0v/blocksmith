@@ -1,6 +1,9 @@
 use libp2p::{
     PeerId,
-    floodsub::{Behaviour as FloodsubBehaviour, Event as FloodsubEvent, Topic},
+    gossipsub::{
+        Behaviour as GossipsubBehaviour, Config as GossipsubConfig, Event as GossipsubEvent,
+        MessageAuthenticity, Sha256Topic,
+    },
     identity::Keypair,
     mdns::{Event as MdnsEvent, tokio::Behaviour as MdnsBehaviour},
     swarm::NetworkBehaviour,
@@ -13,8 +16,8 @@ use crate::block::Block;
 
 pub static KEYS: LazyLock<Keypair> = LazyLock::new(|| Keypair::generate_ed25519());
 pub static PEER_ID: LazyLock<PeerId> = LazyLock::new(|| PeerId::from(KEYS.public()));
-pub static CHAIN_TOPIC: LazyLock<Topic> = LazyLock::new(|| Topic::new("chain"));
-pub static BLOCK_TOPIC: LazyLock<Topic> = LazyLock::new(|| Topic::new("block"));
+pub static CHAIN_TOPIC: LazyLock<Sha256Topic> = LazyLock::new(|| Sha256Topic::new("chain"));
+pub static BLOCK_TOPIC: LazyLock<Sha256Topic> = LazyLock::new(|| Sha256Topic::new("block"));
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ChainResponse {
@@ -29,16 +32,16 @@ pub struct LocalChainRequest {
 
 #[derive(Debug)]
 pub enum EventType {
-    Floodsub(FloodsubEvent),
+    Gossipsub(GossipsubEvent),
     Mdns(MdnsEvent),
     LocalChainResponse(ChainResponse),
     Input(String),
     Init,
 }
 
-impl From<FloodsubEvent> for EventType {
-    fn from(event: FloodsubEvent) -> Self {
-        Self::Floodsub(event)
+impl From<GossipsubEvent> for EventType {
+    fn from(event: GossipsubEvent) -> Self {
+        Self::Gossipsub(event)
     }
 }
 
@@ -51,20 +54,30 @@ impl From<MdnsEvent> for EventType {
 #[derive(NetworkBehaviour)]
 #[behaviour(to_swarm = "EventType")]
 pub struct ChainBehaviour {
-    pub floodsub_behaviour: FloodsubBehaviour,
+    pub gossipsub_behaviour: GossipsubBehaviour,
     pub mdns_behaviour: MdnsBehaviour,
 }
 
 impl ChainBehaviour {
     pub fn new() -> Self {
         let mut behaviour = Self {
-            floodsub_behaviour: FloodsubBehaviour::new(*PEER_ID),
+            gossipsub_behaviour: GossipsubBehaviour::new(
+                MessageAuthenticity::Signed(KEYS.clone()),
+                GossipsubConfig::default(),
+            )
+            .unwrap(),
             mdns_behaviour: MdnsBehaviour::new(Default::default(), *PEER_ID)
                 .expect("can not create MDNS behaviour"),
         };
 
-        behaviour.floodsub_behaviour.subscribe(CHAIN_TOPIC.clone());
-        behaviour.floodsub_behaviour.subscribe(BLOCK_TOPIC.clone());
+        behaviour
+            .gossipsub_behaviour
+            .subscribe(&CHAIN_TOPIC)
+            .unwrap();
+        behaviour
+            .gossipsub_behaviour
+            .subscribe(&BLOCK_TOPIC)
+            .unwrap();
 
         behaviour
     }

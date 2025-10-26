@@ -44,7 +44,7 @@ impl Chain {
         let is_remote_valid = self.is_chain_valid(&remote);
 
         if is_local_valid && is_remote_valid {
-            if local.len() >= remote.len() {
+            if local.len() > remote.len() {
                 local
             } else {
                 remote

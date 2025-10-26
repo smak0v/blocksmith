@@ -22,7 +22,8 @@ pub fn create_block(cmd: &str, swarm: &mut Swarm<ChainBehaviour>, app_state: &mu
 
         swarm
             .behaviour_mut()
-            .floodsub_behaviour
-            .publish(BLOCK_TOPIC.clone(), json);
+            .gossipsub_behaviour
+            .publish(BLOCK_TOPIC.clone(), json)
+            .unwrap();
     }
 }
