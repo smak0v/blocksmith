@@ -12,12 +12,14 @@ use serde::{Deserialize, Serialize};
 
 use std::sync::LazyLock;
 
-use crate::block::Block;
+use crate::domain::block::Block;
 
 pub static KEYS: LazyLock<Keypair> = LazyLock::new(|| Keypair::generate_ed25519());
 pub static PEER_ID: LazyLock<PeerId> = LazyLock::new(|| PeerId::from(KEYS.public()));
-pub static CHAIN_TOPIC: LazyLock<Sha256Topic> = LazyLock::new(|| Sha256Topic::new("chain"));
+pub static TRANSACTION_TOPIC: LazyLock<Sha256Topic> =
+    LazyLock::new(|| Sha256Topic::new("transaction"));
 pub static BLOCK_TOPIC: LazyLock<Sha256Topic> = LazyLock::new(|| Sha256Topic::new("block"));
+pub static CHAIN_TOPIC: LazyLock<Sha256Topic> = LazyLock::new(|| Sha256Topic::new("chain"));
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ChainResponse {
@@ -32,11 +34,11 @@ pub struct LocalChainRequest {
 
 #[derive(Debug)]
 pub enum EventType {
+    Init,
+    Input(String),
+    LocalChainResponse(ChainResponse),
     Gossipsub(GossipsubEvent),
     Mdns(MdnsEvent),
-    LocalChainResponse(ChainResponse),
-    Input(String),
-    Init,
 }
 
 impl From<GossipsubEvent> for EventType {
@@ -65,18 +67,22 @@ impl ChainBehaviour {
                 MessageAuthenticity::Signed(KEYS.clone()),
                 GossipsubConfig::default(),
             )
-            .unwrap(),
+            .expect("can not create gossipsub behaviour"),
             mdns_behaviour: MdnsBehaviour::new(Default::default(), *PEER_ID)
                 .expect("can not create MDNS behaviour"),
         };
 
         behaviour
             .gossipsub_behaviour
-            .subscribe(&CHAIN_TOPIC)
+            .subscribe(&TRANSACTION_TOPIC)
             .unwrap();
         behaviour
             .gossipsub_behaviour
             .subscribe(&BLOCK_TOPIC)
+            .unwrap();
+        behaviour
+            .gossipsub_behaviour
+            .subscribe(&CHAIN_TOPIC)
             .unwrap();
 
         behaviour

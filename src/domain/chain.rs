@@ -1,7 +1,8 @@
 use tracing::{error, warn};
 
-use crate::block::{self, Block};
-use crate::utils;
+use crate::domain::block::Block;
+use crate::domain::transaction::Transaction;
+use crate::utils::helpers;
 
 pub const DIFFICULTY_PREFIX: &str = "00";
 
@@ -12,30 +13,33 @@ pub struct Chain {
 
 impl Chain {
     pub fn new() -> Self {
-        Self { blocks: vec![] }
+        let genesis_block = Block::new(
+            0,
+            "0000000000000000000000000000000000000000000000000000000000000000",
+            vec![Transaction::new(
+                "0x0000000000000000000000000000000000000000",
+                "0x0000000000000000000000000000000000000000",
+                0.0,
+                "Genesis Block",
+            )],
+        );
+
+        Self {
+            blocks: vec![genesis_block],
+        }
     }
 
     pub fn blocks(&mut self) -> &mut Vec<Block> {
         &mut self.blocks
     }
 
-    pub fn genesis(&mut self) {
-        let genesis_block = Block::new(
-            0,
-            String::from("0000000000000000000000000000000000000000000000000000000000000000"),
-            String::from("genesis"),
-        );
-
-        self.blocks.push(genesis_block);
-    }
-
     pub fn try_add_block(&mut self, block: Block) {
-        let prev_block = self.blocks.last().unwrap();
+        let prev_block = self.blocks.last().expect("chain is empty");
 
         if self.is_block_valid(&block, prev_block) {
             self.blocks.push(block);
         } else {
-            error!("Invalid block: {:#?}", block);
+            error!("Invalid block: {:?}", block);
         }
     }
 
@@ -63,7 +67,7 @@ impl Chain {
             warn!("Block with id {} has wrong previous hash", block.id());
 
             return false;
-        } else if !utils::hex_to_binary(&hex::decode(block.hash()).unwrap())
+        } else if !helpers::hex_to_binary(&hex::decode(block.hash()).unwrap())
             .starts_with(DIFFICULTY_PREFIX)
         {
             warn!("Block with id {} has invalid difficulty", block.id());
@@ -77,11 +81,11 @@ impl Chain {
             );
 
             return false;
-        } else if hex::encode(block::calculate_hash(
+        } else if hex::encode(Block::calculate_hash(
             *block.id(),
-            *block.timestamp(),
             block.prev_hash(),
-            block.data(),
+            *block.timestamp(),
+            block.transactions(),
             *block.nonce(),
         )) != *block.hash()
         {

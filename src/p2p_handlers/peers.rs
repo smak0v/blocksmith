@@ -13,7 +13,10 @@ pub fn get_peers(swarm: &Swarm<ChainBehaviour>) -> Vec<String> {
         unique_peers.insert(peer);
     }
 
-    unique_peers.iter().map(|peer| peer.to_string()).collect()
+    unique_peers
+        .into_iter()
+        .map(|&peer| peer.to_string())
+        .collect()
 }
 
 pub fn print_peers(swarm: &Swarm<ChainBehaviour>) {
