@@ -1,3 +1,4 @@
+mod api;
 mod app_state;
 mod domain;
 mod event_handlers;
@@ -19,6 +20,7 @@ use std::mem;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use crate::api::launch_and_run_api_module;
 use crate::app_state::AppState;
 use crate::domain::block::Block;
 use crate::domain::transaction::Transaction;
@@ -84,6 +86,8 @@ async fn main() -> Result<()> {
     )
     .expect("swarm cannot be started");
 
+    let swarm = Arc::new(Mutex::new(swarm));
+
     tokio::spawn(async move {
         time::sleep(Duration::from_secs(10)).await;
 
@@ -92,6 +96,13 @@ async fn main() -> Result<()> {
         initialization_sender
             .send(true)
             .expect("cannot send initialization event");
+    });
+
+    tokio::spawn({
+        let swarm = swarm.clone();
+        let app_state = app_state.clone();
+
+        async move { launch_and_run_api_module(swarm, app_state).await }
     });
 
     tokio::task::spawn_blocking({
@@ -135,6 +146,7 @@ async fn main() -> Result<()> {
     });
 
     loop {
+        let mut swarm = swarm.lock().expect("poisoned mutex");
         let event = {
             select! {
                 _init = initialization_receiver.recv() => {

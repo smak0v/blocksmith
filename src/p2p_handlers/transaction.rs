@@ -7,15 +7,11 @@ use crate::app_state::AppState;
 use crate::domain::transaction::Transaction;
 use crate::p2p::{ADD_TRANSACTION_TOPIC, ChainBehaviour};
 
-pub fn create_transaction(swarm: &mut Swarm<ChainBehaviour>, app_state: &mut Arc<Mutex<AppState>>) {
-    let transaction = Transaction::new(
-        "0x0000000000000000000000000000000000000000",
-        "0x779D22ffB4C936ca0aeBD3ed51EF909081993991",
-        1 * 10 ^ 18,
-        "Transaction example",
-        1,
-        "",
-    );
+pub fn add_and_broadcast_transaction(
+    swarm: &mut Swarm<ChainBehaviour>,
+    app_state: Arc<Mutex<AppState>>,
+    transaction: Transaction,
+) {
     let transaction_json = serde_json::to_string(&transaction).expect("cannot jsonify transaction");
 
     info!("Broadcasting new transaction: {:?}", &transaction);

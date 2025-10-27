@@ -52,7 +52,11 @@ pub fn process_local_chain_request_message(
 }
 
 pub fn process_block_message(app_state: &mut Arc<Mutex<AppState>>, block: Block, sender: PeerId) {
-    info!("Received new block with hash {} from: {}", block.hash(), sender);
+    info!(
+        "Received new block with hash {} from: {}",
+        block.hash(),
+        sender
+    );
 
     let transactions_to_remove = block.transactions().clone();
     let mut app_state_lock = app_state.lock().expect("poisoned mutex");

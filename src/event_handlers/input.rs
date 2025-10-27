@@ -16,9 +16,8 @@ pub fn process_input(
 ) {
     match line.trim().to_lowercase().as_ref() {
         "ls c" => chain_handlers::print_chain(app_state),
-        "ls p" => peer_handlers::print_peers(swarm),
         "ls t" => transaction_handlers::print_transactions(app_state),
-        "create t" => transaction_handlers::create_transaction(swarm, app_state),
+        "ls p" => peer_handlers::print_peers(swarm),
         _ => error!("Unknown command: {}", line),
     }
 }
