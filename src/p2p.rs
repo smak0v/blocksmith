@@ -9,17 +9,27 @@ use libp2p::{
     swarm::NetworkBehaviour,
 };
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeSet;
 
 use std::sync::LazyLock;
 
 use crate::domain::block::Block;
+use crate::domain::transaction::Transaction;
 
 pub static KEYS: LazyLock<Keypair> = LazyLock::new(|| Keypair::generate_ed25519());
 pub static PEER_ID: LazyLock<PeerId> = LazyLock::new(|| PeerId::from(KEYS.public()));
-pub static TRANSACTION_TOPIC: LazyLock<Sha256Topic> =
-    LazyLock::new(|| Sha256Topic::new("transaction"));
+pub static TRANSACTION_TOPIC: LazyLock<Sha256Topic> = LazyLock::new(|| Sha256Topic::new("tx"));
+pub static ADD_TRANSACTION_TOPIC: LazyLock<Sha256Topic> = LazyLock::new(|| Sha256Topic::new("atx"));
+pub static REMOVE_TRANSACTION_TOPIC: LazyLock<Sha256Topic> =
+    LazyLock::new(|| Sha256Topic::new("rtx"));
 pub static BLOCK_TOPIC: LazyLock<Sha256Topic> = LazyLock::new(|| Sha256Topic::new("block"));
 pub static CHAIN_TOPIC: LazyLock<Sha256Topic> = LazyLock::new(|| Sha256Topic::new("chain"));
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Request {
+    pub from_peer_id: String,
+    pub topic: String,
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ChainResponse {
@@ -28,8 +38,9 @@ pub struct ChainResponse {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct LocalChainRequest {
-    pub from_peer_id: String,
+pub struct TransactionsResponse {
+    pub transactions: BTreeSet<Transaction>,
+    pub receiver: String,
 }
 
 #[derive(Debug)]
@@ -37,6 +48,7 @@ pub enum EventType {
     Init,
     Input(String),
     LocalChainResponse(ChainResponse),
+    LocalTransactionsResponse(TransactionsResponse),
     Gossipsub(GossipsubEvent),
     Mdns(MdnsEvent),
 }
@@ -75,6 +87,14 @@ impl ChainBehaviour {
         behaviour
             .gossipsub_behaviour
             .subscribe(&TRANSACTION_TOPIC)
+            .unwrap();
+        behaviour
+            .gossipsub_behaviour
+            .subscribe(&ADD_TRANSACTION_TOPIC)
+            .unwrap();
+        behaviour
+            .gossipsub_behaviour
+            .subscribe(&REMOVE_TRANSACTION_TOPIC)
             .unwrap();
         behaviour
             .gossipsub_behaviour

@@ -2,7 +2,7 @@ use libp2p::{Multiaddr, PeerId, Swarm};
 use tracing::info;
 
 use crate::app_state::AppState;
-use crate::p2p::{CHAIN_TOPIC, ChainBehaviour, LocalChainRequest};
+use crate::p2p::{CHAIN_TOPIC, ChainBehaviour, Request};
 
 pub fn process_mdns_discovered_event(
     swarm: &mut Swarm<ChainBehaviour>,
@@ -20,8 +20,9 @@ pub fn process_mdns_discovered_event(
 
     if app_state.known_peers().len() > 0 {
         for peer in app_state.known_peers().iter() {
-            let local_chain_request = LocalChainRequest {
+            let local_chain_request = Request {
                 from_peer_id: peer.to_string(),
+                topic: CHAIN_TOPIC.to_string(),
             };
             let local_chain_request_json = serde_json::to_string(&local_chain_request)
                 .expect("cannot jsonify local chain request");

@@ -1,6 +1,7 @@
+use chrono::Utc;
 use derive_getters::Getters;
 use secp256k1::{
-    Message, PublicKey, Secp256k1, SecretKey,
+    Message, PublicKey, Secp256k1,
     ecdsa::Signature,
     hashes::{Hash, sha256::Hash as Sha256Hash},
 };
@@ -9,36 +10,43 @@ use serde_json::json;
 
 use std::str::FromStr;
 
-#[derive(Debug, Clone, Getters, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Getters, Serialize, Deserialize)]
 pub struct Transaction {
-    sender: String,
-    recipient: String,
-    amount: f32,
+    from: String,
+    to: String,
+    amount: u64,
     data: String,
+    timestamp: i64,
+    nonce: u64,
     signature: String,
 }
 
 impl Transaction {
     pub fn new(
-        sender: impl Into<String>,
-        recipient: impl Into<String>,
-        amount: f32,
+        from: impl Into<String>,
+        to: impl Into<String>,
+        amount: u64,
         data: impl Into<String>,
+        nonce: u64,
+        signature: impl Into<String>,
     ) -> Self {
         Self {
-            sender: sender.into(),
-            recipient: recipient.into(),
+            from: from.into(),
+            to: to.into(),
             amount,
             data: data.into(),
-            signature: String::new(),
+            timestamp: Utc::now().timestamp(),
+            nonce,
+            signature: signature.into(),
         }
     }
 
-    pub fn sign(&mut self, secret_key: &SecretKey) {
-        self.signature = Secp256k1::new()
-            .sign_ecdsa(self.create_message(), secret_key)
-            .to_string();
-    }
+    // TODO move to the client
+    // pub fn sign(&mut self, secret_key: &SecretKey) {
+    //     self.signature = Secp256k1::new()
+    //         .sign_ecdsa(self.create_message(), secret_key)
+    //         .to_string();
+    // }
 
     pub fn verify(&self, public_key: &PublicKey) -> bool {
         Secp256k1::new()
@@ -50,12 +58,14 @@ impl Transaction {
             .is_ok()
     }
 
-    fn create_message(&self) -> Message {
+    pub fn create_message(&self) -> Message {
         let data = json!({
-            "sender": self.sender,
-            "recipient": self.recipient,
+            "from": self.from,
+            "to": self.to,
             "amount": self.amount,
             "data": self.data,
+            "timestamp": self.timestamp,
+            "nonce": self.nonce,
         });
 
         Message::from_digest(Sha256Hash::hash(data.to_string().as_bytes()).to_byte_array())

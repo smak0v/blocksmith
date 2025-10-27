@@ -1,5 +1,7 @@
 use tracing::{error, warn};
 
+use std::collections::BTreeSet;
+
 use crate::domain::block::Block;
 use crate::domain::transaction::Transaction;
 use crate::utils::helpers;
@@ -16,12 +18,14 @@ impl Chain {
         let genesis_block = Block::new(
             0,
             "0000000000000000000000000000000000000000000000000000000000000000",
-            vec![Transaction::new(
+            BTreeSet::from([Transaction::new(
                 "0x0000000000000000000000000000000000000000",
                 "0x0000000000000000000000000000000000000000",
-                0.0,
+                0,
                 "Genesis Block",
-            )],
+                0,
+                "",
+            )]),
         );
 
         Self {
@@ -33,13 +37,17 @@ impl Chain {
         &mut self.blocks
     }
 
-    pub fn try_add_block(&mut self, block: Block) {
+    pub fn try_add_block(&mut self, block: Block) -> bool {
         let prev_block = self.blocks.last().expect("chain is empty");
 
         if self.is_block_valid(&block, prev_block) {
             self.blocks.push(block);
+
+            true
         } else {
             error!("Invalid block: {:?}", block);
+
+            false
         }
     }
 
@@ -48,10 +56,10 @@ impl Chain {
         let is_remote_valid = self.is_chain_valid(&remote);
 
         if is_local_valid && is_remote_valid {
-            if local.len() > remote.len() {
-                local
-            } else {
+            if remote.len() >= local.len() {
                 remote
+            } else {
+                local
             }
         } else if is_remote_valid && !is_local_valid {
             remote

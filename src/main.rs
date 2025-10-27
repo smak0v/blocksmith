@@ -20,11 +20,15 @@ use std::time::Duration;
 
 use crate::app_state::AppState;
 use crate::domain::block::Block;
+use crate::domain::transaction::Transaction;
 use crate::event_handlers::{
     gossipsub as gossipsub_handlers, init as init_handlers, input as input_handlers,
     mdns as mdns_handlers, response as response_handlers,
 };
-use crate::p2p::{ChainBehaviour, ChainResponse, EventType, KEYS, LocalChainRequest, PEER_ID};
+use crate::p2p::{
+    CHAIN_TOPIC, ChainBehaviour, ChainResponse, EventType, KEYS, PEER_ID, Request,
+    TransactionsResponse,
+};
 use crate::utils::telemetry;
 
 #[tokio::main]
@@ -38,8 +42,14 @@ async fn main() -> Result<()> {
 
     let (initialization_sender, mut initialization_receiver) = mpsc::unbounded_channel();
     let (chain_response_sender, mut chain_response_receiver) = mpsc::unbounded_channel();
+    let (transactions_response_sender, mut transactions_response_receiver) =
+        mpsc::unbounded_channel();
     let (input_sender, mut input_receiver) = mpsc::unbounded_channel();
-    let mut app_state = AppState::new(initialization_sender.clone(), chain_response_sender);
+    let mut app_state = AppState::new(
+        initialization_sender.clone(),
+        chain_response_sender,
+        transactions_response_sender,
+    );
     let mut swarm = SwarmBuilder::with_existing_identity(KEYS.clone())
         .with_tokio()
         .with_tcp(
@@ -90,8 +100,11 @@ async fn main() -> Result<()> {
                 input = input_receiver.recv() => {
                     Some(EventType::Input(input.expect("cannot get input")))
                 },
-                response = chain_response_receiver.recv() => {
-                    Some(EventType::LocalChainResponse(response.expect("response exists")))
+                chain_response = chain_response_receiver.recv() => {
+                    Some(EventType::LocalChainResponse(chain_response.expect("cannot get local chain response")))
+                },
+                transactions_response = transactions_response_receiver.recv() => {
+                    Some(EventType::LocalTransactionsResponse(transactions_response.expect("cannot get local transactions response")))
                 },
                 swarm_event = swarm.select_next_some() => {
                     match swarm_event {
@@ -130,6 +143,9 @@ async fn main() -> Result<()> {
                 EventType::LocalChainResponse(chain_response) => {
                     response_handlers::send_local_chain(&mut swarm, &chain_response);
                 }
+                EventType::LocalTransactionsResponse(transactions_response) => {
+                    response_handlers::send_local_transactions(&mut swarm, &transactions_response);
+                }
                 EventType::Mdns(MdnsEvent::Discovered(discovered_peers)) => {
                     mdns_handlers::process_mdns_discovered_event(
                         &mut swarm,
@@ -153,12 +169,34 @@ async fn main() -> Result<()> {
                             chain_response,
                             propagation_source,
                         );
-                    } else if let Ok(local_chain_request) =
-                        serde_json::from_slice::<LocalChainRequest>(&message.data)
+                    } else if let Ok(request) = serde_json::from_slice::<Request>(&message.data) {
+                        if request.topic == CHAIN_TOPIC.to_string() {
+                            gossipsub_handlers::process_local_chain_request_message(
+                                &mut app_state,
+                                request,
+                                propagation_source,
+                            );
+                        } else {
+                            gossipsub_handlers::process_local_transactions_request_message(
+                                &mut app_state,
+                                request,
+                                propagation_source,
+                            );
+                        }
+                    } else if let Ok(transactions_response) =
+                        serde_json::from_slice::<TransactionsResponse>(&message.data)
                     {
-                        gossipsub_handlers::process_local_chain_request_message(
+                        gossipsub_handlers::process_transactions_response_message(
                             &mut app_state,
-                            local_chain_request,
+                            transactions_response,
+                            propagation_source,
+                        );
+                    } else if let Ok(transaction) =
+                        serde_json::from_slice::<Transaction>(&message.data)
+                    {
+                        gossipsub_handlers::process_transaction_message(
+                            &mut app_state,
+                            transaction,
                             propagation_source,
                         );
                     } else if let Ok(block) = serde_json::from_slice::<Block>(&message.data) {

@@ -5,6 +5,8 @@ use serde_json::json;
 use sha2::{Digest, Sha256};
 use tracing::info;
 
+use std::collections::BTreeSet;
+
 use crate::domain::chain::DIFFICULTY_PREFIX;
 use crate::domain::transaction::Transaction;
 use crate::utils::helpers;
@@ -15,12 +17,12 @@ pub struct Block {
     hash: String,
     prev_hash: String,
     timestamp: i64,
-    transactions: Vec<Transaction>,
+    transactions: BTreeSet<Transaction>,
     nonce: u64,
 }
 
 impl Block {
-    pub fn new(id: u64, prev_hash: impl Into<String>, transactions: Vec<Transaction>) -> Self {
+    pub fn new(id: u64, prev_hash: impl Into<String>, transactions: BTreeSet<Transaction>) -> Self {
         let now = Utc::now().timestamp();
         let prev_hash = prev_hash.into();
         let (nonce, hash) = Block::mine(id, &prev_hash, now, &transactions);
@@ -39,7 +41,7 @@ impl Block {
         id: u64,
         prev_hash: &str,
         timestamp: i64,
-        transactions: &[Transaction],
+        transactions: &BTreeSet<Transaction>,
         nonce: u64,
     ) -> Vec<u8> {
         let data = json!({
@@ -52,7 +54,6 @@ impl Block {
         let mut hasher = Sha256::new();
 
         hasher.update(data.to_string().as_bytes());
-
         hasher.finalize().to_vec()
     }
 
@@ -60,7 +61,7 @@ impl Block {
         id: u64,
         previous_hash: &str,
         timestamp: i64,
-        transactions: &[Transaction],
+        transactions: &BTreeSet<Transaction>,
     ) -> (u64, String) {
         info!("Mining block...");
 
