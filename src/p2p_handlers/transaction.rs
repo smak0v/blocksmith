@@ -1,11 +1,13 @@
 use libp2p::Swarm;
 use tracing::info;
 
+use std::sync::{Arc, Mutex};
+
 use crate::app_state::AppState;
 use crate::domain::transaction::Transaction;
 use crate::p2p::{ADD_TRANSACTION_TOPIC, ChainBehaviour};
 
-pub fn create_transaction(swarm: &mut Swarm<ChainBehaviour>, app_state: &mut AppState) {
+pub fn create_transaction(swarm: &mut Swarm<ChainBehaviour>, app_state: &mut Arc<Mutex<AppState>>) {
     let transaction = Transaction::new(
         "0x0000000000000000000000000000000000000000",
         "0x779D22ffB4C936ca0aeBD3ed51EF909081993991",
@@ -18,9 +20,13 @@ pub fn create_transaction(swarm: &mut Swarm<ChainBehaviour>, app_state: &mut App
 
     info!("Broadcasting new transaction: {:?}", &transaction);
 
-    app_state.transactions().insert(transaction);
+    let mut app_state_lock = app_state.lock().expect("poisoned mutex");
 
-    if app_state.known_peers().len() > 0 {
+    app_state_lock.transactions().insert(transaction);
+
+    if app_state_lock.known_peers().len() > 0 {
+        drop(app_state_lock);
+
         swarm
             .behaviour_mut()
             .gossipsub_behaviour
@@ -29,9 +35,12 @@ pub fn create_transaction(swarm: &mut Swarm<ChainBehaviour>, app_state: &mut App
     }
 }
 
-pub fn print_transactions(app_state: &mut AppState) {
-    let local_transactions = serde_json::to_string_pretty(app_state.transactions())
+pub fn print_transactions(app_state: &mut Arc<Mutex<AppState>>) {
+    let mut app_state_lock = app_state.lock().expect("poisoned mutex");
+    let local_transactions = serde_json::to_string_pretty(app_state_lock.transactions())
         .expect("cannot jsonify local transactions");
+
+    drop(app_state_lock);
 
     info!("Local transactions:");
     info!("{}", local_transactions);

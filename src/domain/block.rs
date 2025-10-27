@@ -23,15 +23,14 @@ pub struct Block {
 
 impl Block {
     pub fn new(id: u64, prev_hash: impl Into<String>, transactions: BTreeSet<Transaction>) -> Self {
-        let now = Utc::now().timestamp();
         let prev_hash = prev_hash.into();
-        let (nonce, hash) = Block::mine(id, &prev_hash, now, &transactions);
+        let (nonce, hash, timestamp) = Block::mine(id, &prev_hash, &transactions);
 
         Self {
             id,
             hash,
             prev_hash,
-            timestamp: now,
+            timestamp,
             transactions,
             nonce,
         }
@@ -60,10 +59,9 @@ impl Block {
     fn mine(
         id: u64,
         previous_hash: &str,
-        timestamp: i64,
         transactions: &BTreeSet<Transaction>,
-    ) -> (u64, String) {
-        info!("Mining block...");
+    ) -> (u64, String, i64) {
+        info!("Mining block with id: {}", id);
 
         let mut nonce = 0;
 
@@ -72,6 +70,7 @@ impl Block {
                 info!("Nonce: {}", nonce);
             }
 
+            let timestamp = Utc::now().timestamp();
             let hex_hash = Block::calculate_hash(id, previous_hash, timestamp, transactions, nonce);
             let binary_hash = helpers::hex_to_binary(&hex_hash);
 
@@ -79,11 +78,11 @@ impl Block {
                 let encoded_hex_hash = hex::encode(&hex_hash);
 
                 info!(
-                    "Block is mined with nonce - {}, hash - {}, binary hash - {}",
-                    nonce, encoded_hex_hash, binary_hash
+                    "Block with id {} is mined with nonce - {}, hash - {}, binary hash - {}",
+                    id, nonce, encoded_hex_hash, binary_hash
                 );
 
-                return (nonce, encoded_hex_hash);
+                return (nonce, encoded_hex_hash, timestamp);
             }
 
             nonce += 1;

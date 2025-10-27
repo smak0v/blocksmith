@@ -16,14 +16,15 @@ use tracing::{error, info};
 
 use std::io;
 use std::mem;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use crate::app_state::AppState;
 use crate::domain::block::Block;
 use crate::domain::transaction::Transaction;
 use crate::event_handlers::{
-    gossipsub as gossipsub_handlers, init as init_handlers, input as input_handlers,
-    mdns as mdns_handlers, response as response_handlers,
+    block as block_handlers, gossipsub as gossipsub_handlers, init as init_handlers,
+    input as input_handlers, mdns as mdns_handlers, response as response_handlers,
 };
 use crate::p2p::{
     CHAIN_TOPIC, ChainBehaviour, ChainResponse, EventType, KEYS, PEER_ID, Request,
@@ -44,12 +45,14 @@ async fn main() -> Result<()> {
     let (chain_response_sender, mut chain_response_receiver) = mpsc::unbounded_channel();
     let (transactions_response_sender, mut transactions_response_receiver) =
         mpsc::unbounded_channel();
+    let (mined_block_sender, mut mined_block_receiver) = mpsc::unbounded_channel();
     let (input_sender, mut input_receiver) = mpsc::unbounded_channel();
-    let mut app_state = AppState::new(
+    let mut app_state = Arc::new(Mutex::new(AppState::new(
         initialization_sender.clone(),
         chain_response_sender,
         transactions_response_sender,
-    );
+        mined_block_sender.clone(),
+    )));
     let mut swarm = SwarmBuilder::with_existing_identity(KEYS.clone())
         .with_tokio()
         .with_tcp(
@@ -82,13 +85,53 @@ async fn main() -> Result<()> {
     .expect("swarm cannot be started");
 
     tokio::spawn(async move {
-        time::sleep(Duration::from_secs(5)).await;
+        time::sleep(Duration::from_secs(10)).await;
 
         info!("Sending initialization event");
 
         initialization_sender
             .send(true)
             .expect("cannot send initialization event");
+    });
+
+    tokio::task::spawn_blocking({
+        let app_state = app_state.clone();
+
+        move || {
+            let mut last_block = None;
+
+            loop {
+                let mut app_state_lock = app_state.lock().expect("poisoned mutex");
+                let prev_block;
+
+                match last_block.as_ref() {
+                    Some(block) => prev_block = block,
+                    None => {
+                        if app_state_lock.chain().blocks().len() == 0 {
+                            continue;
+                        }
+
+                        prev_block = app_state_lock
+                            .chain()
+                            .blocks()
+                            .last()
+                            .expect("no previous block found")
+                    }
+                }
+
+                let block_id = prev_block.id() + 1;
+                let prev_block_hash = prev_block.hash().clone();
+                let transactions = mem::take(app_state_lock.transactions());
+
+                drop(app_state_lock);
+
+                let new_block = Block::new(block_id, prev_block_hash, transactions);
+
+                mined_block_sender.send(new_block.clone()).unwrap();
+
+                last_block = Some(new_block);
+            }
+        }
     });
 
     loop {
@@ -106,6 +149,9 @@ async fn main() -> Result<()> {
                 transactions_response = transactions_response_receiver.recv() => {
                     Some(EventType::LocalTransactionsResponse(transactions_response.expect("cannot get local transactions response")))
                 },
+                mined_block_response = mined_block_receiver.recv() => {
+                    Some(EventType::MinedBlock(mined_block_response.expect("cannot get mined block response")))
+                }
                 swarm_event = swarm.select_next_some() => {
                     match swarm_event {
                         SwarmEvent::Behaviour(behaviour_event) => match behaviour_event {
@@ -117,14 +163,14 @@ async fn main() -> Result<()> {
                         SwarmEvent::ConnectionEstablished { peer_id, ..} => {
                             info!("Connection established with peer: {peer_id}");
 
-                            app_state.known_peers().insert(peer_id);
+                            app_state.lock().expect("poisoned mutex").known_peers().insert(peer_id);
 
                             None
                         }
                         SwarmEvent::ConnectionClosed { peer_id, ..} => {
                             info!("Connection closed with peer: {peer_id}");
 
-                            app_state.known_peers().remove(&peer_id);
+                            app_state.lock().expect("poisoned mutex").known_peers().remove(&peer_id);
 
                             None
                         }
@@ -145,6 +191,13 @@ async fn main() -> Result<()> {
                 }
                 EventType::LocalTransactionsResponse(transactions_response) => {
                     response_handlers::send_local_transactions(&mut swarm, &transactions_response);
+                }
+                EventType::MinedBlock(mined_block) => {
+                    block_handlers::add_and_broadcast_block(
+                        &mut swarm,
+                        &mut app_state,
+                        mined_block,
+                    );
                 }
                 EventType::Mdns(MdnsEvent::Discovered(discovered_peers)) => {
                     mdns_handlers::process_mdns_discovered_event(

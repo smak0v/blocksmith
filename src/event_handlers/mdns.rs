@@ -1,12 +1,14 @@
 use libp2p::{Multiaddr, PeerId, Swarm};
 use tracing::info;
 
+use std::sync::{Arc, Mutex};
+
 use crate::app_state::AppState;
 use crate::p2p::{CHAIN_TOPIC, ChainBehaviour, Request};
 
 pub fn process_mdns_discovered_event(
     swarm: &mut Swarm<ChainBehaviour>,
-    app_state: &mut AppState,
+    app_state: &mut Arc<Mutex<AppState>>,
     discovered_peers: Vec<(PeerId, Multiaddr)>,
 ) {
     info!("MDNS discovered peers: {:?}", discovered_peers);
@@ -18,8 +20,10 @@ pub fn process_mdns_discovered_event(
             .add_explicit_peer(&peer);
     }
 
-    if app_state.known_peers().len() > 0 {
-        for peer in app_state.known_peers().iter() {
+    let mut app_state_lock = app_state.lock().expect("poisoned mutex");
+
+    if app_state_lock.known_peers().len() > 0 {
+        for peer in app_state_lock.known_peers().iter() {
             let local_chain_request = Request {
                 from_peer_id: peer.to_string(),
                 topic: CHAIN_TOPIC.to_string(),

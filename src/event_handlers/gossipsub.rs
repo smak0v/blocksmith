@@ -3,6 +3,7 @@ use secp256k1::PublicKey;
 use tracing::{error, info, warn};
 
 use std::str::FromStr;
+use std::sync::{Arc, Mutex};
 
 use crate::app_state::AppState;
 use crate::domain::block::Block;
@@ -10,7 +11,7 @@ use crate::domain::transaction::Transaction;
 use crate::p2p::{ChainResponse, PEER_ID, Request, TransactionsResponse};
 
 pub fn process_chain_response_message(
-    app_state: &mut AppState,
+    app_state: &mut Arc<Mutex<AppState>>,
     chain_response: ChainResponse,
     sender: PeerId,
 ) {
@@ -18,26 +19,28 @@ pub fn process_chain_response_message(
         info!("Chain response received from: {}", sender);
         info!("Received chain length: {}", chain_response.blocks.len());
 
-        let curr_chain = app_state.chain().blocks().clone();
+        let mut app_state_lock = app_state.lock().expect("poisoned mutex");
+        let curr_chain = app_state_lock.chain().blocks().clone();
 
-        *app_state.chain().blocks() = app_state
+        *app_state_lock.chain().blocks() = app_state_lock
             .chain()
             .choose_chain(curr_chain, chain_response.blocks);
     }
 }
 
 pub fn process_local_chain_request_message(
-    app_state: &mut AppState,
+    app_state: &mut Arc<Mutex<AppState>>,
     local_chain_request: Request,
     requestor: PeerId,
 ) {
     if local_chain_request.from_peer_id == PEER_ID.to_string() {
         info!("Sending local chain to: {}", requestor);
 
-        let chain_response_sender = app_state.chain_response_sender().clone();
+        let mut app_state_lock = app_state.lock().expect("poisoned mutex");
+        let chain_response_sender = app_state_lock.chain_response_sender().clone();
 
         if let Err(error) = chain_response_sender.send(ChainResponse {
-            blocks: app_state.chain().blocks().clone(),
+            blocks: app_state_lock.chain().blocks().clone(),
             receiver: requestor.to_string(),
         }) {
             error!(
@@ -48,21 +51,22 @@ pub fn process_local_chain_request_message(
     }
 }
 
-pub fn process_block_message(app_state: &mut AppState, block: Block, sender: PeerId) {
-    info!("Received new block from: {}", sender);
+pub fn process_block_message(app_state: &mut Arc<Mutex<AppState>>, block: Block, sender: PeerId) {
+    info!("Received new block with hash {} from: {}", block.hash(), sender);
 
     let transactions_to_remove = block.transactions().clone();
-    let added = app_state.chain().try_add_block(block);
+    let mut app_state_lock = app_state.lock().expect("poisoned mutex");
+    let added = app_state_lock.chain().try_add_block(block);
 
     if added {
         transactions_to_remove.into_iter().for_each(|transaction| {
-            app_state.transactions().remove(&transaction);
+            app_state_lock.transactions().remove(&transaction);
         })
     }
 }
 
 pub fn process_transactions_response_message(
-    app_state: &mut AppState,
+    app_state: &mut Arc<Mutex<AppState>>,
     transactions_response: TransactionsResponse,
     sender: PeerId,
 ) {
@@ -73,12 +77,14 @@ pub fn process_transactions_response_message(
             transactions_response.transactions.len()
         );
 
+        let mut app_state_lock = app_state.lock().expect("poisoned mutex");
+
         transactions_response
             .transactions
             .into_iter()
             .for_each(|tx| {
                 if tx.verify(&PublicKey::from_str(tx.from()).expect("invalid public key")) {
-                    app_state.transactions().insert(tx);
+                    app_state_lock.transactions().insert(tx);
                 } else {
                     warn!("Received invalid transaction: {:?}", tx);
                 }
@@ -87,17 +93,18 @@ pub fn process_transactions_response_message(
 }
 
 pub fn process_local_transactions_request_message(
-    app_state: &mut AppState,
+    app_state: &mut Arc<Mutex<AppState>>,
     local_transactions_request: Request,
     requestor: PeerId,
 ) {
     if local_transactions_request.from_peer_id == PEER_ID.to_string() {
         info!("Sending local transactions to: {}", requestor);
 
-        let transactions_response_sender = app_state.transactions_response_sender().clone();
+        let mut app_state_lock = app_state.lock().expect("poisoned mutex");
+        let transactions_response_sender = app_state_lock.transactions_response_sender().clone();
 
         if let Err(error) = transactions_response_sender.send(TransactionsResponse {
-            transactions: app_state.transactions().clone(),
+            transactions: app_state_lock.transactions().clone(),
             receiver: requestor.to_string(),
         }) {
             error!(
@@ -109,14 +116,16 @@ pub fn process_local_transactions_request_message(
 }
 
 pub fn process_transaction_message(
-    app_state: &mut AppState,
+    app_state: &mut Arc<Mutex<AppState>>,
     transaction: Transaction,
     sender: PeerId,
 ) {
     info!("Received new transaction from: {}", sender);
 
     if transaction.verify(&PublicKey::from_str(transaction.from()).expect("invalid public key")) {
-        app_state.transactions().insert(transaction);
+        let mut app_state_lock = app_state.lock().expect("poisoned mutex");
+
+        app_state_lock.transactions().insert(transaction);
     } else {
         warn!("Received invalid transaction: {:?}", transaction);
     }

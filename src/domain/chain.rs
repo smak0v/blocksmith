@@ -6,7 +6,7 @@ use crate::domain::block::Block;
 use crate::domain::transaction::Transaction;
 use crate::utils::helpers;
 
-pub const DIFFICULTY_PREFIX: &str = "00";
+pub const DIFFICULTY_PREFIX: &str = "000";
 
 #[derive(Debug)]
 pub struct Chain {
