@@ -4,20 +4,14 @@ mod handlers;
 mod startup;
 
 use anyhow::Result;
-use libp2p::Swarm;
-
-use std::sync::{Arc, Mutex};
+use tokio::sync::mpsc::UnboundedSender;
 
 use crate::api::startup::Application;
-use crate::app_state::AppState;
-use crate::p2p::ChainBehaviour;
+use crate::domain::transaction::Transaction;
 
-pub async fn launch_and_run_api_module(
-    swarm: Arc<Mutex<Swarm<ChainBehaviour>>>,
-    node_state: Arc<Mutex<AppState>>,
-) -> Result<()> {
+pub async fn launch_and_run_api_module(api_tx_sender: UnboundedSender<Transaction>) -> Result<()> {
     let configuration = configuration::get_configuration()?;
-    let application = Application::build(configuration, swarm, node_state).await?;
+    let application = Application::build(configuration, api_tx_sender).await?;
 
     Ok(application.run_util_stopped().await?)
 }

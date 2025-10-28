@@ -1,3 +1,4 @@
+use bincode::{Decode, Encode};
 use chrono::Utc;
 use derive_getters::Getters;
 use secp256k1::{
@@ -10,7 +11,20 @@ use serde_json::json;
 
 use std::str::FromStr;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Getters, Serialize, Deserialize)]
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Getters,
+    Serialize,
+    Deserialize,
+    Encode,
+    Decode,
+)]
 pub struct Transaction {
     from: String,
     to: String,
@@ -41,13 +55,6 @@ impl Transaction {
         }
     }
 
-    // TODO move to the client
-    // pub fn sign(&mut self, secret_key: &SecretKey) {
-    //     self.signature = Secp256k1::new()
-    //         .sign_ecdsa(self.create_message(), secret_key)
-    //         .to_string();
-    // }
-
     pub fn verify(&self, public_key: &PublicKey) -> bool {
         Secp256k1::new()
             .verify_ecdsa(
@@ -64,7 +71,6 @@ impl Transaction {
             "to": self.to,
             "amount": self.amount,
             "data": self.data,
-            "timestamp": self.timestamp,
             "nonce": self.nonce,
         });
 

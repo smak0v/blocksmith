@@ -3,46 +3,41 @@ use actix_web::{
     dev::Server,
     web::{self, Data},
 };
-use libp2p::Swarm;
+use tokio::sync::mpsc::UnboundedSender;
 use tracing::info;
 use tracing_actix_web::TracingLogger;
 
-use std::fmt::{Debug, Formatter};
 use std::io::Error;
 use std::net::TcpListener;
-use std::sync::{Arc, Mutex};
 
 use crate::api::configuration::Settings;
 use crate::api::handlers;
-use crate::app_state::AppState;
-use crate::p2p::ChainBehaviour;
+use crate::domain::transaction::Transaction;
 
 pub struct Application {
     server: Server,
 }
 
-pub struct SwarmWrapper(pub Arc<Mutex<Swarm<ChainBehaviour>>>);
-
 #[derive(Debug)]
-pub struct NodeStateWrapper(pub Arc<Mutex<AppState>>);
+pub struct ApiTxSender(pub UnboundedSender<Transaction>);
 
 impl Application {
     pub async fn build(
         configuration: Settings,
-        swarm: Arc<Mutex<Swarm<ChainBehaviour>>>,
-        node_state: Arc<Mutex<AppState>>,
+        api_tx_sender: UnboundedSender<Transaction>,
     ) -> Result<Self, Error> {
-        let address = format!(
-            "{}:{}",
-            configuration.application.host, configuration.application.port
-        );
+        let address = format!("{}:0", configuration.application.host);
         let listener = TcpListener::bind(address.clone()).expect(&format!(
             "failed to bind port {}",
             configuration.application.port
         ));
-        let server = Application::run(listener, swarm, node_state)?;
+        let port = listener.local_addr()?.port();
+        let server = Application::run(listener, api_tx_sender)?;
 
-        info!("Server started on {}", address);
+        info!(
+            "Server started on {}:{}",
+            configuration.application.host, port
+        );
 
         Ok(Self { server })
     }
@@ -53,27 +48,18 @@ impl Application {
 
     fn run(
         listener: TcpListener,
-        swarm: Arc<Mutex<Swarm<ChainBehaviour>>>,
-        node_state: Arc<Mutex<AppState>>,
+        api_tx_sender: UnboundedSender<Transaction>,
     ) -> Result<Server, Error> {
-        let swarm = Data::new(SwarmWrapper(swarm));
-        let node_state = Data::new(NodeStateWrapper(node_state));
+        let api_tx_sender = Data::new(ApiTxSender(api_tx_sender));
         let server = HttpServer::new(move || {
             App::new()
                 .wrap(TracingLogger::default())
                 .route("/transaction", web::post().to(handlers::submit_transaction))
-                .app_data(swarm.clone())
-                .app_data(node_state.clone())
+                .app_data(api_tx_sender.clone())
         })
         .listen(listener)?
         .run();
 
         Ok(server)
-    }
-}
-
-impl Debug for SwarmWrapper {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "SwarmWrapper")
     }
 }

@@ -50,6 +50,7 @@ pub enum EventType {
     LocalChainResponse(ChainResponse),
     LocalTransactionsResponse(TransactionsResponse),
     MinedBlock(Block),
+    TransactionSubmitted(Transaction),
     Gossipsub(GossipsubEvent),
     Mdns(MdnsEvent),
 }

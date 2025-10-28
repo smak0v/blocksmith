@@ -4,14 +4,13 @@ use actix_web::{
 };
 use secp256k1::PublicKey;
 use serde::{Deserialize, Serialize};
-use tracing::error;
+use tracing::{error, info};
 
 use std::str::FromStr;
 
 use crate::api::errors::ApiError;
-use crate::api::startup::{NodeStateWrapper, SwarmWrapper};
+use crate::api::startup::ApiTxSender;
 use crate::domain::transaction::Transaction;
-use crate::p2p_handlers::transaction as transaction_handlers;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct SubmittedTransaction {
@@ -29,11 +28,10 @@ pub struct SubmitTransactionRequest {
     public_key: String,
 }
 
-#[tracing::instrument(name = "Submit transaction")]
+#[tracing::instrument(name = "Submit transaction", skip(api_tx_sender))]
 pub async fn submit_transaction(
     params: Json<SubmitTransactionRequest>,
-    swarm: Data<SwarmWrapper>,
-    node_state: Data<NodeStateWrapper>,
+    api_tx_sender: Data<ApiTxSender>,
 ) -> Result<HttpResponse, ApiError> {
     let transaction = Transaction::new(
         &params.transaction.from,
@@ -48,20 +46,16 @@ pub async fn submit_transaction(
         return Ok(HttpResponse::BadRequest().json("Invalid public key"));
     }
 
-    match swarm.0.lock() {
+    match api_tx_sender.0.send(transaction) {
         Err(error) => {
-            error!("Swarm mutex lock error: {:?}", error);
+            error!("Error while submitted transaction: {:?}", error);
 
             Ok(HttpResponse::InternalServerError().finish())
         }
-        Ok(mut swarm) => {
-            transaction_handlers::add_and_broadcast_transaction(
-                &mut swarm,
-                node_state.0.clone(),
-                transaction,
-            );
+        Ok(_) => {
+            info!("Transaction submitted successfully");
 
-            Ok(HttpResponse::Ok().finish())
+            Ok(HttpResponse::Ok().json("Transaction submitted successfully"))
         }
     }
 }

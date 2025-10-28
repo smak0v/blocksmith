@@ -32,6 +32,7 @@ use crate::p2p::{
     CHAIN_TOPIC, ChainBehaviour, ChainResponse, EventType, KEYS, PEER_ID, Request,
     TransactionsResponse,
 };
+use crate::p2p_handlers::transaction as transaction_handlers;
 use crate::utils::telemetry;
 
 #[tokio::main]
@@ -45,15 +46,14 @@ async fn main() -> Result<()> {
 
     let (initialization_sender, mut initialization_receiver) = mpsc::unbounded_channel();
     let (chain_response_sender, mut chain_response_receiver) = mpsc::unbounded_channel();
-    let (transactions_response_sender, mut transactions_response_receiver) =
-        mpsc::unbounded_channel();
+    let (txs_response_sender, mut txs_response_receiver) = mpsc::unbounded_channel();
     let (mined_block_sender, mut mined_block_receiver) = mpsc::unbounded_channel();
     let (input_sender, mut input_receiver) = mpsc::unbounded_channel();
+    let (api_tx_sender, mut api_tx_receiver) = mpsc::unbounded_channel();
     let mut app_state = Arc::new(Mutex::new(AppState::new(
         initialization_sender.clone(),
         chain_response_sender,
-        transactions_response_sender,
-        mined_block_sender.clone(),
+        txs_response_sender,
     )));
     let mut swarm = SwarmBuilder::with_existing_identity(KEYS.clone())
         .with_tokio()
@@ -86,8 +86,6 @@ async fn main() -> Result<()> {
     )
     .expect("swarm cannot be started");
 
-    let swarm = Arc::new(Mutex::new(swarm));
-
     tokio::spawn(async move {
         time::sleep(Duration::from_secs(10)).await;
 
@@ -99,10 +97,11 @@ async fn main() -> Result<()> {
     });
 
     tokio::spawn({
-        let swarm = swarm.clone();
-        let app_state = app_state.clone();
-
-        async move { launch_and_run_api_module(swarm, app_state).await }
+        async move {
+            if let Err(error) = launch_and_run_api_module(api_tx_sender).await {
+                eprintln!("API crashed: {:?}", error);
+            }
+        }
     });
 
     tokio::task::spawn_blocking({
@@ -146,7 +145,6 @@ async fn main() -> Result<()> {
     });
 
     loop {
-        let mut swarm = swarm.lock().expect("poisoned mutex");
         let event = {
             select! {
                 _init = initialization_receiver.recv() => {
@@ -158,11 +156,14 @@ async fn main() -> Result<()> {
                 chain_response = chain_response_receiver.recv() => {
                     Some(EventType::LocalChainResponse(chain_response.expect("cannot get local chain response")))
                 },
-                transactions_response = transactions_response_receiver.recv() => {
-                    Some(EventType::LocalTransactionsResponse(transactions_response.expect("cannot get local transactions response")))
+                txs_response = txs_response_receiver.recv() => {
+                    Some(EventType::LocalTransactionsResponse(txs_response.expect("cannot get local transactions response")))
                 },
                 mined_block_response = mined_block_receiver.recv() => {
                     Some(EventType::MinedBlock(mined_block_response.expect("cannot get mined block response")))
+                }
+                transaction = api_tx_receiver.recv() => {
+                    Some(EventType::TransactionSubmitted(transaction.expect("cannot get transaction")))
                 }
                 swarm_event = swarm.select_next_some() => {
                     match swarm_event {
@@ -209,6 +210,13 @@ async fn main() -> Result<()> {
                         &mut swarm,
                         &mut app_state,
                         mined_block,
+                    );
+                }
+                EventType::TransactionSubmitted(transaction) => {
+                    transaction_handlers::add_and_broadcast_transaction(
+                        &mut swarm,
+                        &mut app_state,
+                        transaction,
                     );
                 }
                 EventType::Mdns(MdnsEvent::Discovered(discovered_peers)) => {

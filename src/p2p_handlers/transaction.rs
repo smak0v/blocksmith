@@ -9,7 +9,7 @@ use crate::p2p::{ADD_TRANSACTION_TOPIC, ChainBehaviour};
 
 pub fn add_and_broadcast_transaction(
     swarm: &mut Swarm<ChainBehaviour>,
-    app_state: Arc<Mutex<AppState>>,
+    app_state: &mut Arc<Mutex<AppState>>,
     transaction: Transaction,
 ) {
     let transaction_json = serde_json::to_string(&transaction).expect("cannot jsonify transaction");

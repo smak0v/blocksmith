@@ -1,7 +1,7 @@
+use bincode::{self, config};
 use chrono::Utc;
 use derive_getters::Getters;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use sha2::{Digest, Sha256};
 use tracing::info;
 
@@ -42,18 +42,19 @@ impl Block {
         timestamp: i64,
         transactions: &BTreeSet<Transaction>,
         nonce: u64,
-    ) -> Vec<u8> {
-        let data = json!({
-            "id": id,
-            "prev_hash": prev_hash,
-            "timestamp": timestamp,
-            "transactions": transactions,
-            "nonce": nonce
-        });
+    ) -> [u8; 32] {
         let mut hasher = Sha256::new();
 
-        hasher.update(data.to_string().as_bytes());
-        hasher.finalize().to_vec()
+        hasher.update(id.to_le_bytes());
+        hasher.update(prev_hash.as_bytes());
+        hasher.update(timestamp.to_le_bytes());
+
+        for transaction in transactions {
+            hasher.update(bincode::encode_to_vec(transaction, config::standard()).unwrap());
+        }
+
+        hasher.update(nonce.to_le_bytes());
+        hasher.finalize().into()
     }
 
     fn mine(
@@ -64,13 +65,13 @@ impl Block {
         info!("Mining block with id: {}", id);
 
         let mut nonce = 0;
+        let timestamp = Utc::now().timestamp();
 
         loop {
             if nonce % 100_000 == 0 {
                 info!("Nonce: {}", nonce);
             }
 
-            let timestamp = Utc::now().timestamp();
             let hex_hash = Block::calculate_hash(id, previous_hash, timestamp, transactions, nonce);
             let binary_hash = helpers::hex_to_binary(&hex_hash);
 
