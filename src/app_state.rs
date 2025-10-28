@@ -27,12 +27,13 @@ impl AppState {
         initialization_sender: UnboundedSender<bool>,
         chain_response_sender: UnboundedSender<ChainResponse>,
         transactions_response_sender: UnboundedSender<TransactionsResponse>,
+        mine_genesis: bool,
     ) -> Self {
         Self {
             initialization_sender,
             chain_response_sender,
             transactions_response_sender,
-            chain: Chain::new(),
+            chain: Chain::new(mine_genesis),
             known_peers: HashSet::new(),
             transactions: BTreeSet::new(),
         }

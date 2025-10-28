@@ -8,7 +8,7 @@ use crate::p2p::{CHAIN_TOPIC, ChainBehaviour, Request};
 
 pub fn process_mdns_discovered_event(
     swarm: &mut Swarm<ChainBehaviour>,
-    app_state: &mut Arc<Mutex<AppState>>,
+    app_state: Arc<Mutex<AppState>>,
     discovered_peers: Vec<(PeerId, Multiaddr)>,
 ) {
     info!("MDNS discovered peers: {:?}", discovered_peers);

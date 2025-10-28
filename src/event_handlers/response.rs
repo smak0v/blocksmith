@@ -4,10 +4,10 @@ use crate::p2p::{
     CHAIN_TOPIC, ChainBehaviour, ChainResponse, PEER_ID, TRANSACTION_TOPIC, TransactionsResponse,
 };
 
-pub fn send_local_chain(swarm: &mut Swarm<ChainBehaviour>, chain_response: &ChainResponse) {
+pub fn send_local_chain(swarm: &mut Swarm<ChainBehaviour>, chain_response: ChainResponse) {
     if chain_response.receiver != PEER_ID.to_string() {
         let chain_response_json =
-            serde_json::to_string(chain_response).expect("cannot jsonify chain response");
+            serde_json::to_string(&chain_response).expect("cannot jsonify chain response");
 
         swarm
             .behaviour_mut()
@@ -19,10 +19,10 @@ pub fn send_local_chain(swarm: &mut Swarm<ChainBehaviour>, chain_response: &Chai
 
 pub fn send_local_transactions(
     swarm: &mut Swarm<ChainBehaviour>,
-    transactions_response: &TransactionsResponse,
+    transactions_response: TransactionsResponse,
 ) {
     if transactions_response.receiver != PEER_ID.to_string() {
-        let transactions_response_json = serde_json::to_string(transactions_response)
+        let transactions_response_json = serde_json::to_string(&transactions_response)
             .expect("cannot jsonify transactions response");
 
         swarm

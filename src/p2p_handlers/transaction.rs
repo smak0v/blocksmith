@@ -9,7 +9,7 @@ use crate::p2p::{ADD_TRANSACTION_TOPIC, ChainBehaviour};
 
 pub fn add_and_broadcast_transaction(
     swarm: &mut Swarm<ChainBehaviour>,
-    app_state: &mut Arc<Mutex<AppState>>,
+    app_state: Arc<Mutex<AppState>>,
     transaction: Transaction,
 ) {
     let transaction_json = serde_json::to_string(&transaction).expect("cannot jsonify transaction");
@@ -31,7 +31,7 @@ pub fn add_and_broadcast_transaction(
     }
 }
 
-pub fn print_transactions(app_state: &mut Arc<Mutex<AppState>>) {
+pub fn print_transactions(app_state: Arc<Mutex<AppState>>) {
     let mut app_state_lock = app_state.lock().expect("poisoned mutex");
     let local_transactions = serde_json::to_string_pretty(app_state_lock.transactions())
         .expect("cannot jsonify local transactions");

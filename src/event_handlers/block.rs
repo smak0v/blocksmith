@@ -9,7 +9,7 @@ use crate::p2p::{BLOCK_TOPIC, ChainBehaviour, REMOVE_TRANSACTION_TOPIC};
 
 pub fn add_and_broadcast_block(
     swarm: &mut Swarm<ChainBehaviour>,
-    app_state: &mut Arc<Mutex<AppState>>,
+    app_state: Arc<Mutex<AppState>>,
     block: Block,
 ) {
     let mut app_state_lock = app_state.lock().expect("poisoned mutex");

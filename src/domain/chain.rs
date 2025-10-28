@@ -14,22 +14,26 @@ pub struct Chain {
 }
 
 impl Chain {
-    pub fn new() -> Self {
-        let genesis_block = Block::new(
-            0,
-            "0000000000000000000000000000000000000000000000000000000000000000",
-            BTreeSet::from([Transaction::new(
-                "0x0000000000000000000000000000000000000000",
-                "0x0000000000000000000000000000000000000000",
+    pub fn new(mine_genesis: bool) -> Self {
+        if mine_genesis {
+            let genesis_block = Block::new(
                 0,
-                "Genesis Block",
-                0,
-                "",
-            )]),
-        );
+                "0000000000000000000000000000000000000000000000000000000000000000",
+                BTreeSet::from([Transaction::new(
+                    "0x0000000000000000000000000000000000000000",
+                    "0x0000000000000000000000000000000000000000",
+                    0,
+                    "Genesis Block",
+                    0,
+                    "",
+                )]),
+            );
 
-        Self {
-            blocks: vec![genesis_block],
+            Self {
+                blocks: vec![genesis_block],
+            }
+        } else {
+            Self { blocks: vec![] }
         }
     }
 

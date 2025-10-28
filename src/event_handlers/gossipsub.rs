@@ -11,7 +11,7 @@ use crate::domain::transaction::Transaction;
 use crate::p2p::{ChainResponse, PEER_ID, Request, TransactionsResponse};
 
 pub fn process_chain_response_message(
-    app_state: &mut Arc<Mutex<AppState>>,
+    app_state: Arc<Mutex<AppState>>,
     chain_response: ChainResponse,
     sender: PeerId,
 ) {
@@ -29,7 +29,7 @@ pub fn process_chain_response_message(
 }
 
 pub fn process_local_chain_request_message(
-    app_state: &mut Arc<Mutex<AppState>>,
+    app_state: Arc<Mutex<AppState>>,
     local_chain_request: Request,
     requestor: PeerId,
 ) {
@@ -51,7 +51,7 @@ pub fn process_local_chain_request_message(
     }
 }
 
-pub fn process_block_message(app_state: &mut Arc<Mutex<AppState>>, block: Block, sender: PeerId) {
+pub fn process_block_message(app_state: Arc<Mutex<AppState>>, block: Block, sender: PeerId) {
     info!(
         "Received new block with hash {} from: {}",
         block.hash(),
@@ -70,7 +70,7 @@ pub fn process_block_message(app_state: &mut Arc<Mutex<AppState>>, block: Block,
 }
 
 pub fn process_transactions_response_message(
-    app_state: &mut Arc<Mutex<AppState>>,
+    app_state: Arc<Mutex<AppState>>,
     transactions_response: TransactionsResponse,
     sender: PeerId,
 ) {
@@ -97,7 +97,7 @@ pub fn process_transactions_response_message(
 }
 
 pub fn process_local_transactions_request_message(
-    app_state: &mut Arc<Mutex<AppState>>,
+    app_state: Arc<Mutex<AppState>>,
     local_transactions_request: Request,
     requestor: PeerId,
 ) {
@@ -120,7 +120,7 @@ pub fn process_local_transactions_request_message(
 }
 
 pub fn process_transaction_message(
-    app_state: &mut Arc<Mutex<AppState>>,
+    app_state: Arc<Mutex<AppState>>,
     transaction: Transaction,
     sender: PeerId,
 ) {
