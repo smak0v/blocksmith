@@ -3,7 +3,7 @@ use tracing::info;
 
 use std::sync::{Arc, Mutex};
 
-use crate::app_state::AppState;
+use crate::app::AppState;
 use crate::domain::transaction::Transaction;
 use crate::p2p::{ADD_TRANSACTION_TOPIC, ChainBehaviour};
 

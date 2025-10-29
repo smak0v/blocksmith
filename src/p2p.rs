@@ -9,8 +9,8 @@ use libp2p::{
     swarm::NetworkBehaviour,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeSet;
 
+use std::collections::BTreeSet;
 use std::sync::LazyLock;
 
 use crate::domain::block::Block;
@@ -24,6 +24,13 @@ pub static REMOVE_TRANSACTION_TOPIC: LazyLock<Sha256Topic> =
     LazyLock::new(|| Sha256Topic::new("rtx"));
 pub static BLOCK_TOPIC: LazyLock<Sha256Topic> = LazyLock::new(|| Sha256Topic::new("block"));
 pub static CHAIN_TOPIC: LazyLock<Sha256Topic> = LazyLock::new(|| Sha256Topic::new("chain"));
+
+#[derive(NetworkBehaviour)]
+#[behaviour(to_swarm = "EventType")]
+pub struct ChainBehaviour {
+    pub gossipsub_behaviour: GossipsubBehaviour,
+    pub mdns_behaviour: MdnsBehaviour,
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Request {
@@ -55,6 +62,43 @@ pub enum EventType {
     Mdns(MdnsEvent),
 }
 
+impl ChainBehaviour {
+    pub fn new() -> Self {
+        let mut chain_behaviour = Self {
+            gossipsub_behaviour: GossipsubBehaviour::new(
+                MessageAuthenticity::Signed(KEYS.clone()),
+                GossipsubConfig::default(),
+            )
+            .expect("failed to create gossipsub behaviour"),
+            mdns_behaviour: MdnsBehaviour::new(Default::default(), *PEER_ID)
+                .expect("failed to create MDNS behaviour"),
+        };
+
+        chain_behaviour
+            .gossipsub_behaviour
+            .subscribe(&TRANSACTION_TOPIC)
+            .expect("failed to subscribe to TRANSACTION_TOPIC");
+        chain_behaviour
+            .gossipsub_behaviour
+            .subscribe(&ADD_TRANSACTION_TOPIC)
+            .expect("failed to subscribe to ADD_TRANSACTION_TOPIC");
+        chain_behaviour
+            .gossipsub_behaviour
+            .subscribe(&REMOVE_TRANSACTION_TOPIC)
+            .expect("failed to subscribe to REMOVE_TRANSACTION_TOPIC");
+        chain_behaviour
+            .gossipsub_behaviour
+            .subscribe(&BLOCK_TOPIC)
+            .expect("failed to subscribe to BLOCK_TOPIC");
+        chain_behaviour
+            .gossipsub_behaviour
+            .subscribe(&CHAIN_TOPIC)
+            .expect("failed to subscribe to CHAIN_TOPIC");
+
+        chain_behaviour
+    }
+}
+
 impl From<GossipsubEvent> for EventType {
     fn from(event: GossipsubEvent) -> Self {
         Self::Gossipsub(event)
@@ -64,49 +108,5 @@ impl From<GossipsubEvent> for EventType {
 impl From<MdnsEvent> for EventType {
     fn from(event: MdnsEvent) -> Self {
         Self::Mdns(event)
-    }
-}
-
-#[derive(NetworkBehaviour)]
-#[behaviour(to_swarm = "EventType")]
-pub struct ChainBehaviour {
-    pub gossipsub_behaviour: GossipsubBehaviour,
-    pub mdns_behaviour: MdnsBehaviour,
-}
-
-impl ChainBehaviour {
-    pub fn new() -> Self {
-        let mut behaviour = Self {
-            gossipsub_behaviour: GossipsubBehaviour::new(
-                MessageAuthenticity::Signed(KEYS.clone()),
-                GossipsubConfig::default(),
-            )
-            .expect("can not create gossipsub behaviour"),
-            mdns_behaviour: MdnsBehaviour::new(Default::default(), *PEER_ID)
-                .expect("can not create MDNS behaviour"),
-        };
-
-        behaviour
-            .gossipsub_behaviour
-            .subscribe(&TRANSACTION_TOPIC)
-            .unwrap();
-        behaviour
-            .gossipsub_behaviour
-            .subscribe(&ADD_TRANSACTION_TOPIC)
-            .unwrap();
-        behaviour
-            .gossipsub_behaviour
-            .subscribe(&REMOVE_TRANSACTION_TOPIC)
-            .unwrap();
-        behaviour
-            .gossipsub_behaviour
-            .subscribe(&BLOCK_TOPIC)
-            .unwrap();
-        behaviour
-            .gossipsub_behaviour
-            .subscribe(&CHAIN_TOPIC)
-            .unwrap();
-
-        behaviour
     }
 }

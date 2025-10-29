@@ -3,7 +3,7 @@ use tracing::info;
 
 use std::sync::{Arc, Mutex};
 
-use crate::app_state::AppState;
+use crate::app::AppState;
 use crate::domain::block::Block;
 use crate::p2p::{BLOCK_TOPIC, ChainBehaviour, REMOVE_TRANSACTION_TOPIC};
 

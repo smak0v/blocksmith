@@ -1,11 +1,12 @@
 use libp2p::PeerId;
 use secp256k1::PublicKey;
+use tokio::sync::mpsc::UnboundedSender;
 use tracing::{error, info, warn};
 
 use std::str::FromStr;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, atomic::Ordering};
 
-use crate::app_state::AppState;
+use crate::app::AppState;
 use crate::domain::block::Block;
 use crate::domain::transaction::Transaction;
 use crate::p2p::{ChainResponse, PEER_ID, Request, TransactionsResponse};
@@ -32,12 +33,12 @@ pub fn process_local_chain_request_message(
     app_state: Arc<Mutex<AppState>>,
     local_chain_request: Request,
     requestor: PeerId,
+    chain_response_sender: UnboundedSender<ChainResponse>,
 ) {
     if local_chain_request.from_peer_id == PEER_ID.to_string() {
         info!("Sending local chain to: {}", requestor);
 
         let mut app_state_lock = app_state.lock().expect("poisoned mutex");
-        let chain_response_sender = app_state_lock.chain_response_sender().clone();
 
         if let Err(error) = chain_response_sender.send(ChainResponse {
             blocks: app_state_lock.chain().blocks().clone(),
@@ -65,7 +66,10 @@ pub fn process_block_message(app_state: Arc<Mutex<AppState>>, block: Block, send
     if added {
         transactions_to_remove.into_iter().for_each(|transaction| {
             app_state_lock.transactions().remove(&transaction);
-        })
+        });
+        app_state_lock.cancel_mining.store(true, Ordering::Relaxed);
+
+        info!("Mining cancelled due to new block arrival");
     }
 }
 
@@ -100,12 +104,12 @@ pub fn process_local_transactions_request_message(
     app_state: Arc<Mutex<AppState>>,
     local_transactions_request: Request,
     requestor: PeerId,
+    transactions_response_sender: UnboundedSender<TransactionsResponse>,
 ) {
     if local_transactions_request.from_peer_id == PEER_ID.to_string() {
         info!("Sending local transactions to: {}", requestor);
 
         let mut app_state_lock = app_state.lock().expect("poisoned mutex");
-        let transactions_response_sender = app_state_lock.transactions_response_sender().clone();
 
         if let Err(error) = transactions_response_sender.send(TransactionsResponse {
             transactions: app_state_lock.transactions().clone(),

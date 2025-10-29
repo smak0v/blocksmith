@@ -2,6 +2,5 @@
 /target
 /.idea
 
-Cargo.lock
 .DS_Store
 .env

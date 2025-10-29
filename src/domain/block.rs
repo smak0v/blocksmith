@@ -6,6 +6,10 @@ use sha2::{Digest, Sha256};
 use tracing::info;
 
 use std::collections::BTreeSet;
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
 
 use crate::domain::chain::DIFFICULTY_PREFIX;
 use crate::domain::transaction::Transaction;
@@ -22,17 +26,27 @@ pub struct Block {
 }
 
 impl Block {
-    pub fn new(id: u64, prev_hash: impl Into<String>, transactions: BTreeSet<Transaction>) -> Self {
+    pub fn new(
+        id: u64,
+        prev_hash: impl Into<String>,
+        transactions: BTreeSet<Transaction>,
+        cancel_mining: Arc<AtomicBool>,
+    ) -> Option<Self> {
         let prev_hash = prev_hash.into();
-        let (nonce, hash, timestamp) = Block::mine(id, &prev_hash, &transactions);
 
-        Self {
-            id,
-            hash,
-            prev_hash,
-            timestamp,
-            transactions,
-            nonce,
+        if let Some((nonce, hash, timestamp)) =
+            Block::mine(id, &prev_hash, &transactions, cancel_mining)
+        {
+            Some(Self {
+                id,
+                hash,
+                prev_hash,
+                timestamp,
+                transactions,
+                nonce,
+            })
+        } else {
+            None
         }
     }
 
@@ -61,13 +75,20 @@ impl Block {
         id: u64,
         previous_hash: &str,
         transactions: &BTreeSet<Transaction>,
-    ) -> (u64, String, i64) {
+        cancel_mining: Arc<AtomicBool>,
+    ) -> Option<(u64, String, i64)> {
         info!("Mining block with id: {}", id);
 
         let mut nonce = 0;
         let timestamp = Utc::now().timestamp();
 
         loop {
+            if cancel_mining.load(Ordering::Relaxed) {
+                println!("Mining cancelled");
+
+                return None;
+            }
+
             if nonce % 100_000 == 0 {
                 info!("Nonce: {}", nonce);
             }
@@ -83,7 +104,7 @@ impl Block {
                     id, nonce, encoded_hex_hash, binary_hash
                 );
 
-                return (nonce, encoded_hex_hash, timestamp);
+                return Some((nonce, encoded_hex_hash, timestamp));
             }
 
             nonce += 1;

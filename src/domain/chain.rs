@@ -1,6 +1,7 @@
 use tracing::{error, warn};
 
 use std::collections::BTreeSet;
+use std::sync::{Arc, atomic::AtomicBool};
 
 use crate::domain::block::Block;
 use crate::domain::transaction::Transaction;
@@ -27,10 +28,11 @@ impl Chain {
                     0,
                     "",
                 )]),
+                Arc::new(AtomicBool::new(false)),
             );
 
             Self {
-                blocks: vec![genesis_block],
+                blocks: vec![genesis_block.unwrap()],
             }
         } else {
             Self { blocks: vec![] }

@@ -2,7 +2,7 @@ use tracing::info;
 
 use std::sync::{Arc, Mutex};
 
-use crate::app_state::AppState;
+use crate::app::AppState;
 
 pub fn print_chain(app_state: Arc<Mutex<AppState>>) {
     let mut app_state_lock = app_state.lock().expect("poisoned mutex");

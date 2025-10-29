@@ -1,41 +1,25 @@
 use libp2p::{Multiaddr, PeerId, Swarm};
-use tracing::info;
+use tracing::{info, warn};
 
-use std::sync::{Arc, Mutex};
-
-use crate::app_state::AppState;
-use crate::p2p::{CHAIN_TOPIC, ChainBehaviour, Request};
+use crate::p2p::ChainBehaviour;
 
 pub fn process_mdns_discovered_event(
     swarm: &mut Swarm<ChainBehaviour>,
-    app_state: Arc<Mutex<AppState>>,
     discovered_peers: Vec<(PeerId, Multiaddr)>,
 ) {
     info!("MDNS discovered peers: {:?}", discovered_peers);
 
     for (peer, ..) in discovered_peers {
+        info!("Dialing peer {} ...", peer);
+
         swarm
             .behaviour_mut()
             .gossipsub_behaviour
             .add_explicit_peer(&peer);
-    }
 
-    let mut app_state_lock = app_state.lock().expect("poisoned mutex");
-
-    if app_state_lock.known_peers().len() > 0 {
-        for peer in app_state_lock.known_peers().iter() {
-            let local_chain_request = Request {
-                from_peer_id: peer.to_string(),
-                topic: CHAIN_TOPIC.to_string(),
-            };
-            let local_chain_request_json = serde_json::to_string(&local_chain_request)
-                .expect("cannot jsonify local chain request");
-
-            swarm
-                .behaviour_mut()
-                .gossipsub_behaviour
-                .publish(CHAIN_TOPIC.clone(), local_chain_request_json)
-                .expect("cannot publish local chain request");
+        match swarm.dial(peer) {
+            Ok(_) => info!("Dial successful"),
+            Err(error) => warn!("Failed to dial peer {}: {}", peer, error),
         }
     }
 }

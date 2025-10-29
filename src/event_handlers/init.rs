@@ -1,20 +1,32 @@
 use libp2p::Swarm;
+use tokio::time;
+use tracing::info;
 
 use std::mem;
-use std::thread::sleep;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use crate::app::AppState;
 use crate::p2p::{CHAIN_TOPIC, ChainBehaviour, Request, TRANSACTION_TOPIC};
 use crate::p2p_handlers::peers as peers_handlers;
 
-pub fn init_node(swarm: &mut Swarm<ChainBehaviour>) {
-    let mut peers = peers_handlers::get_peers(&swarm);
+pub async fn init_node(swarm: &mut Swarm<ChainBehaviour>, app_state: Arc<Mutex<AppState>>) {
+    let mut peers = peers_handlers::get_peers(app_state.clone());
+    let initialized = { app_state.lock().expect("poisoned mutex").initialized };
+
+    if !initialized {
+        while peers.len() == 0 {
+            info!("Waiting for discovering of known peers...");
+
+            time::sleep(Duration::from_secs(10)).await;
+
+            peers = peers_handlers::get_peers(app_state.clone());
+        }
+    }
 
     if !peers.is_empty() {
         let last_peer_id = peers.len() - 1;
         let last_peer = mem::take(&mut peers[last_peer_id]);
-
-        sleep(Duration::from_secs(10));
 
         let local_chain_request = Request {
             from_peer_id: last_peer.to_string(),
@@ -42,4 +54,6 @@ pub fn init_node(swarm: &mut Swarm<ChainBehaviour>) {
             .publish(TRANSACTION_TOPIC.clone(), local_transactions_request_json)
             .expect("cannot publish transactions");
     }
+
+    app_state.lock().expect("poisoned mutex").initialized = true;
 }

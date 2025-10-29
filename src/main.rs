@@ -1,25 +1,24 @@
 mod api;
-mod app_state;
+mod app;
 mod domain;
 mod event_handlers;
 mod p2p;
 mod p2p_handlers;
 mod runners;
+mod swarm;
 mod utils;
 
 use anyhow::Result;
 use libp2p::{
-    Swarm, SwarmBuilder, futures::StreamExt, gossipsub::Event as GossipsubEvent,
-    mdns::Event as MdnsEvent, noise::Config as NoiseConfig, swarm::SwarmEvent,
-    tcp::Config as TcpConfig, tls::Config as TlsConfig, yamux::Config as YamuxConfig,
+    Swarm, futures::StreamExt, gossipsub::Event as GossipsubEvent, mdns::Event as MdnsEvent,
+    swarm::SwarmEvent,
 };
-use tokio::{select, sync::mpsc, task};
+use tokio::{select, sync::mpsc::UnboundedSender, task};
 use tracing::info;
 
-use std::env;
 use std::sync::{Arc, Mutex};
 
-use crate::app_state::AppState;
+use crate::app::{AppState, Channels};
 use crate::domain::block::Block;
 use crate::domain::transaction::Transaction;
 use crate::event_handlers::{
@@ -27,8 +26,7 @@ use crate::event_handlers::{
     input as input_handlers, mdns as mdns_handlers, response as response_handlers,
 };
 use crate::p2p::{
-    CHAIN_TOPIC, ChainBehaviour, ChainResponse, EventType, KEYS, PEER_ID, Request,
-    TransactionsResponse,
+    CHAIN_TOPIC, ChainBehaviour, ChainResponse, EventType, Request, TransactionsResponse,
 };
 use crate::p2p_handlers::transaction as transaction_handlers;
 use crate::utils::telemetry;
@@ -39,72 +37,59 @@ async fn main() -> Result<()> {
 
     telemetry::init("blocksmith", "info");
 
-    info!("Node ID: {}", PEER_ID.clone());
+    let swarm = swarm::init();
+    let (app_state, channels) = app::init();
+    let app_state = Arc::new(Mutex::new(app_state));
 
-    let (initialization_sender, mut initialization_receiver) = mpsc::unbounded_channel();
-    let (chain_response_sender, mut chain_response_receiver) = mpsc::unbounded_channel();
-    let (txs_response_sender, mut txs_response_receiver) = mpsc::unbounded_channel();
-    let (input_sender, mut input_receiver) = mpsc::unbounded_channel();
-    let (api_tx_sender, mut api_tx_receiver) = mpsc::unbounded_channel();
-    let (mined_block_sender, mut mined_block_receiver) = mpsc::unbounded_channel();
+    task::spawn({
+        let initialization_sender = channels.initialization.sender.clone();
 
-    let mine_genesis_block = env::var("MINE_GENESIS")
-        .expect("MINE_GENESIS environmental variable is not set")
-        .trim()
-        .to_lowercase();
-    let app_state = Arc::new(Mutex::new(AppState::new(
-        initialization_sender.clone(),
-        chain_response_sender,
-        txs_response_sender,
-        mine_genesis_block == "true",
-    )));
-    let mut swarm = SwarmBuilder::with_existing_identity(KEYS.clone())
-        .with_tokio()
-        .with_tcp(
-            TcpConfig::default(),
-            (TlsConfig::new, NoiseConfig::new),
-            YamuxConfig::default,
-        )?
-        .with_behaviour(|_| ChainBehaviour::new())?
-        .with_swarm_config(|cfg| cfg)
-        .build();
+        async move { runners::run_node_initialization(initialization_sender).await }
+    });
+    task::spawn({
+        let input_sender = channels.input.sender.clone();
 
-    Swarm::listen_on(
-        &mut swarm,
-        "/ip4/0.0.0.0/tcp/0"
-            .parse()
-            .expect("cannot get local socket"),
-    )
-    .expect("swarm cannot be started");
+        async move { runners::run_input_handler(input_sender) }
+    });
+    task::spawn({
+        let api_tx_sender = channels.api_tx.sender.clone();
 
-    task::spawn(async move { runners::run_node_initialization(initialization_sender).await });
-    task::spawn(async move { runners::run_input_handler(input_sender) });
-    task::spawn(async move { runners::run_api_module(api_tx_sender).await });
+        async move { runners::run_api_module(api_tx_sender).await }
+    });
     task::spawn_blocking({
         let app_state = app_state.clone();
+        let mined_block_sender = channels.mined_block.sender.clone();
 
         move || runners::run_miner(app_state, mined_block_sender)
     });
 
+    Ok(run_node(swarm, app_state, channels).await)
+}
+
+async fn run_node(
+    mut swarm: Swarm<ChainBehaviour>,
+    app_state: Arc<Mutex<AppState>>,
+    mut channels: Channels,
+) {
     loop {
         let event = {
             select! {
-                _init = initialization_receiver.recv() => {
+                _init = channels.initialization.receiver.recv() => {
                     Some(EventType::Init)
                 },
-                input = input_receiver.recv() => {
+                input = channels.input.receiver.recv() => {
                     Some(EventType::Input(input.expect("cannot get input")))
                 },
-                chain_response = chain_response_receiver.recv() => {
+                chain_response = channels.chain_response.receiver.recv() => {
                     Some(EventType::LocalChainResponse(chain_response.expect("cannot get local chain response")))
                 },
-                txs_response = txs_response_receiver.recv() => {
+                txs_response = channels.txs_response.receiver.recv() => {
                     Some(EventType::LocalTransactionsResponse(txs_response.expect("cannot get local transactions response")))
                 },
-                mined_block_response = mined_block_receiver.recv() => {
+                mined_block_response = channels.mined_block.receiver.recv() => {
                     Some(EventType::MinedBlock(mined_block_response.expect("cannot get mined block response")))
                 }
-                transaction = api_tx_receiver.recv() => {
+                transaction = channels.api_tx.receiver.recv() => {
                     Some(EventType::TransactionSubmitted(transaction.expect("cannot get transaction")))
                 }
                 swarm_event = swarm.select_next_some() => {
@@ -133,20 +118,29 @@ async fn main() -> Result<()> {
             }
         };
 
-        process_event(&mut swarm, app_state.clone(), event);
+        let senders = (
+            channels.chain_response.sender.clone(),
+            channels.txs_response.sender.clone(),
+        );
+
+        process_event(&mut swarm, app_state.clone(), senders, event).await;
     }
 }
 
-fn process_event(
+async fn process_event(
     swarm: &mut Swarm<ChainBehaviour>,
     app_state: Arc<Mutex<AppState>>,
+    senders: (
+        UnboundedSender<ChainResponse>,
+        UnboundedSender<TransactionsResponse>,
+    ),
     event: Option<EventType>,
 ) {
     if let Some(event) = event {
         match event {
-            EventType::Init => init_handlers::init_node(swarm),
+            EventType::Init => init_handlers::init_node(swarm, app_state).await,
             EventType::Input(input) => {
-                input_handlers::process_input(swarm, app_state, input.as_ref());
+                input_handlers::process_input(app_state, input.as_ref());
             }
             EventType::LocalChainResponse(chain_response) => {
                 response_handlers::send_local_chain(swarm, chain_response);
@@ -161,7 +155,7 @@ fn process_event(
                 transaction_handlers::add_and_broadcast_transaction(swarm, app_state, transaction);
             }
             EventType::Mdns(MdnsEvent::Discovered(discovered_peers)) => {
-                mdns_handlers::process_mdns_discovered_event(swarm, app_state, discovered_peers);
+                mdns_handlers::process_mdns_discovered_event(swarm, discovered_peers);
             }
             EventType::Mdns(MdnsEvent::Expired(expired_peers)) => {
                 mdns_handlers::process_mdns_expired_peers(swarm, expired_peers);
@@ -183,12 +177,14 @@ fn process_event(
                             app_state,
                             request,
                             propagation_source,
+                            senders.0,
                         );
                     } else {
                         gossipsub_handlers::process_local_transactions_request_message(
                             app_state,
                             request,
                             propagation_source,
+                            senders.1,
                         );
                     }
                 } else if let Ok(transactions_response) =
