@@ -77,7 +77,15 @@ impl Chain {
     }
 
     fn is_block_valid(&self, block: &Block, prev_block: &Block) -> bool {
-        if block.prev_hash() != prev_block.hash() {
+        if *block.id() != *prev_block.id() + 1 {
+            warn!(
+                "Block with id {} is not the next block after the latest {}",
+                block.id(),
+                prev_block.id()
+            );
+
+            return false;
+        } else if block.prev_hash() != prev_block.hash() {
             warn!("Block with id {} has wrong previous hash", block.id());
 
             return false;
@@ -85,14 +93,6 @@ impl Chain {
             .starts_with(DIFFICULTY_PREFIX)
         {
             warn!("Block with id {} has invalid difficulty", block.id());
-
-            return false;
-        } else if *block.id() != *prev_block.id() + 1 {
-            warn!(
-                "Block with id {} is not the next block after the latest {}",
-                block.id(),
-                prev_block.id()
-            );
 
             return false;
         } else if hex::encode(Block::calculate_hash(

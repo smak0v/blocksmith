@@ -3,7 +3,7 @@ use tracing::error;
 use std::sync::{Arc, Mutex};
 
 use crate::app::AppState;
-use crate::p2p_handlers::{
+use crate::handlers::{
     chain as chain_handlers, peers as peer_handlers, transaction as transaction_handlers,
 };
 

@@ -42,7 +42,7 @@ pub struct Channel<T> {
 impl AppState {
     pub fn new() -> Self {
         let mine_genesis = env::var("MINE_GENESIS")
-            .expect("MINE_GENESIS environmental variable is not set")
+            .unwrap_or("true".into())
             .trim()
             .to_lowercase();
         let mine_genesis = mine_genesis == "true";

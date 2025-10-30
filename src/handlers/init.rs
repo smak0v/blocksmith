@@ -7,8 +7,8 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use crate::app::AppState;
+use crate::handlers::peers as peers_handlers;
 use crate::p2p::{CHAIN_TOPIC, ChainBehaviour, Request, TRANSACTION_TOPIC};
-use crate::p2p_handlers::peers as peers_handlers;
 
 pub async fn init_node(swarm: &mut Swarm<ChainBehaviour>, app_state: Arc<Mutex<AppState>>) {
     let mut peers = peers_handlers::get_peers(app_state.clone());

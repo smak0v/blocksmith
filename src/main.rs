@@ -1,9 +1,8 @@
 mod api;
 mod app;
 mod domain;
-mod event_handlers;
+mod handlers;
 mod p2p;
-mod p2p_handlers;
 mod runners;
 mod swarm;
 mod utils;
@@ -21,14 +20,14 @@ use std::sync::{Arc, Mutex};
 use crate::app::{AppState, Channels};
 use crate::domain::block::Block;
 use crate::domain::transaction::Transaction;
-use crate::event_handlers::{
+use crate::handlers::{
     block as block_handlers, gossipsub as gossipsub_handlers, init as init_handlers,
     input as input_handlers, mdns as mdns_handlers, response as response_handlers,
+    transaction as transaction_handlers,
 };
 use crate::p2p::{
     CHAIN_TOPIC, ChainBehaviour, ChainResponse, EventType, Request, TransactionsResponse,
 };
-use crate::p2p_handlers::transaction as transaction_handlers;
 use crate::utils::telemetry;
 
 #[tokio::main]
