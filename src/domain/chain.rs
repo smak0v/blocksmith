@@ -63,22 +63,24 @@ impl Chain {
         }
     }
 
-    pub fn choose_chain(&mut self, local: Vec<Block>, remote: Vec<Block>) -> Vec<Block> {
+    pub fn choose_chain(&mut self, local: Vec<Block>, remote: Vec<Block>) -> Option<Vec<Block>> {
         let is_local_valid = self.is_chain_valid(&local);
         let is_remote_valid = self.is_chain_valid(&remote);
 
         if is_local_valid && is_remote_valid {
             if remote.len() >= local.len() {
-                remote
+                Some(remote)
             } else {
-                local
+                Some(local)
             }
         } else if is_remote_valid && !is_local_valid {
-            remote
+            Some(remote)
         } else if !is_remote_valid && is_local_valid {
-            local
+            Some(local)
         } else {
-            panic!("Local and remote chains are both invalid");
+            error!("Local and remote chains are both invalid");
+
+            None
         }
     }
 

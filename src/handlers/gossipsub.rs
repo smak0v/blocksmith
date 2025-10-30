@@ -23,9 +23,13 @@ pub fn process_chain_response_message(
         let mut app_state_lock = app_state.lock().expect("poisoned mutex");
         let curr_chain = app_state_lock.chain().blocks().clone();
 
-        *app_state_lock.chain().blocks() = app_state_lock
+        match app_state_lock
             .chain()
-            .choose_chain(curr_chain, chain_response.blocks);
+            .choose_chain(curr_chain, chain_response.blocks)
+        {
+            Some(chain) => *app_state_lock.chain().blocks() = chain,
+            None => {}
+        };
     }
 }
 
