@@ -4,10 +4,9 @@ use std::collections::BTreeSet;
 use std::sync::{Arc, atomic::AtomicBool};
 
 use crate::domain::block::Block;
+use crate::domain::constants::DIFFICULTY_PREFIX;
 use crate::domain::transaction::Transaction;
 use crate::utils::helpers;
-
-pub const DIFFICULTY_PREFIX: &str = "000";
 
 #[derive(Debug)]
 pub struct Chain {
@@ -99,7 +98,9 @@ impl Chain {
         } else {
             match hex::decode(block.hash()) {
                 Ok(decoded_hash) => {
-                    if !helpers::hex_to_binary(&decoded_hash).starts_with(DIFFICULTY_PREFIX) {
+                    if !helpers::hex_to_binary(&decoded_hash)
+                        .starts_with::<&str>(DIFFICULTY_PREFIX.as_ref())
+                    {
                         warn!("Block with id {} has invalid difficulty", block.id());
 
                         return false;

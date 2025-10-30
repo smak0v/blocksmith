@@ -11,7 +11,7 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
 };
 
-use crate::domain::chain::DIFFICULTY_PREFIX;
+use crate::domain::constants::DIFFICULTY_PREFIX;
 use crate::domain::transaction::Transaction;
 use crate::utils::helpers;
 
@@ -113,7 +113,7 @@ impl Block {
                 };
             let binary_hash = helpers::hex_to_binary(&hex_hash);
 
-            if binary_hash.starts_with(DIFFICULTY_PREFIX) {
+            if binary_hash.starts_with::<&str>(DIFFICULTY_PREFIX.as_ref()) {
                 let encoded_hex_hash = hex::encode(&hex_hash);
 
                 info!(

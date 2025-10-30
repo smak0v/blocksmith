@@ -71,6 +71,10 @@ Nodes automatically connect via `libp2p::Swarm`.
 It is possible to skip mining of the genesis block in all nodes which are launched after the very first one by setting
 up `MINE_GENESIS` environmental variable to `false` either in the `.env` file or as global environmental variable.
 
+In addition, mining difficulty may be configured by setting up the `DIFFICULTY_PREFIX` environmental variable. Default
+value is `"000"`. It is planned to implement changeable mining difficulty algorithm in the future to avoid manual
+configuration of this value.
+
 It is also possible to configure API service host and port by modifying them in the `configuration.yaml` file.
 
 ------------------------------------------------------------------------------------------------------------------------
