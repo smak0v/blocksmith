@@ -85,6 +85,8 @@ pub fn run_miner(app_state: Arc<Mutex<AppState>>, mined_block_sender: UnboundedS
                 }
                 Err(error) => error!("Error sending mined block to main thread: {:?}", error),
             }
+        } else {
+            last_block = None;
         }
     }
 }

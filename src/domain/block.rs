@@ -97,7 +97,7 @@ impl Block {
 
         loop {
             if cancel_mining.load(Ordering::Relaxed) {
-                println!("Mining cancelled");
+                info!("Mining cancelled");
 
                 return None;
             }
