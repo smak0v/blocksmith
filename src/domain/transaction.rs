@@ -8,6 +8,7 @@ use secp256k1::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use tracing::log::warn;
 
 use std::str::FromStr;
 
@@ -56,12 +57,17 @@ impl Transaction {
     }
 
     pub fn verify(&self, public_key: &PublicKey) -> bool {
+        let signature = match Signature::from_str(&self.signature) {
+            Ok(signature) => signature,
+            Err(error) => {
+                warn!("Invalid signature: {:?}", error);
+
+                return false;
+            }
+        };
+
         Secp256k1::new()
-            .verify_ecdsa(
-                self.create_message(),
-                &Signature::from_str(&self.signature).unwrap(),
-                public_key,
-            )
+            .verify_ecdsa(self.create_message(), &signature, public_key)
             .is_ok()
     }
 

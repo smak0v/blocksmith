@@ -44,7 +44,14 @@ impl Chain {
     }
 
     pub fn try_add_block(&mut self, block: Block) -> bool {
-        let prev_block = self.blocks.last().expect("chain is empty");
+        let prev_block = match self.blocks.last() {
+            Some(block) => block,
+            None => {
+                error!("Chain is empty");
+
+                return false;
+            }
+        };
 
         if self.is_block_valid(&block, prev_block) {
             self.blocks.push(block);
@@ -84,31 +91,43 @@ impl Chain {
                 prev_block.id()
             );
 
-            return false;
+            false
         } else if block.prev_hash() != prev_block.hash() {
             warn!("Block with id {} has wrong previous hash", block.id());
 
-            return false;
-        } else if !helpers::hex_to_binary(&hex::decode(block.hash()).unwrap())
-            .starts_with(DIFFICULTY_PREFIX)
-        {
-            warn!("Block with id {} has invalid difficulty", block.id());
+            false
+        } else {
+            match hex::decode(block.hash()) {
+                Ok(decoded_hash) => {
+                    if !helpers::hex_to_binary(&decoded_hash).starts_with(DIFFICULTY_PREFIX) {
+                        warn!("Block with id {} has invalid difficulty", block.id());
 
-            return false;
-        } else if hex::encode(Block::calculate_hash(
-            *block.id(),
-            block.prev_hash(),
-            *block.timestamp(),
-            block.transactions(),
-            *block.nonce(),
-        )) != *block.hash()
-        {
-            warn!("Block with id {} has invalid hash", block.id());
+                        return false;
+                    }
+                }
+                Err(error) => {
+                    error!("Error decoding block hash: {:?}", error);
 
-            return false;
+                    return false;
+                }
+            }
+
+            let block_hash = Block::calculate_hash(
+                *block.id(),
+                block.prev_hash(),
+                *block.timestamp(),
+                block.transactions(),
+                *block.nonce(),
+            );
+
+            if block_hash == None || hex::encode(block_hash.unwrap()) != *block.hash() {
+                warn!("Block with id {} has invalid hash", block.id());
+
+                false
+            } else {
+                true
+            }
         }
-
-        true
     }
 
     fn is_chain_valid(&self, chain: &[Block]) -> bool {

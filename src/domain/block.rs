@@ -3,7 +3,7 @@ use chrono::Utc;
 use derive_getters::Getters;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use tracing::info;
+use tracing::{error, info};
 
 use std::collections::BTreeSet;
 use std::sync::{
@@ -56,19 +56,32 @@ impl Block {
         timestamp: i64,
         transactions: &BTreeSet<Transaction>,
         nonce: u64,
-    ) -> [u8; 32] {
+    ) -> Option<[u8; 32]> {
         let mut hasher = Sha256::new();
+        let bincode_encode_config = config::standard();
 
         hasher.update(id.to_le_bytes());
         hasher.update(prev_hash.as_bytes());
         hasher.update(timestamp.to_le_bytes());
 
         for transaction in transactions {
-            hasher.update(bincode::encode_to_vec(transaction, config::standard()).unwrap());
+            let encode_result = bincode::encode_to_vec(transaction, bincode_encode_config);
+
+            match encode_result {
+                Ok(encoded_transaction) => hasher.update(encoded_transaction),
+                Err(error) => {
+                    error!(
+                        "Cannot calculate block hash due to error while encoding transaction: {:?}",
+                        error
+                    );
+
+                    return None;
+                }
+            }
         }
 
         hasher.update(nonce.to_le_bytes());
-        hasher.finalize().into()
+        Some(hasher.finalize().into())
     }
 
     fn mine(
@@ -93,7 +106,11 @@ impl Block {
                 info!("Nonce: {}", nonce);
             }
 
-            let hex_hash = Block::calculate_hash(id, previous_hash, timestamp, transactions, nonce);
+            let hex_hash =
+                match Block::calculate_hash(id, previous_hash, timestamp, transactions, nonce) {
+                    Some(hash) => hash,
+                    None => return None,
+                };
             let binary_hash = helpers::hex_to_binary(&hex_hash);
 
             if binary_hash.starts_with(DIFFICULTY_PREFIX) {

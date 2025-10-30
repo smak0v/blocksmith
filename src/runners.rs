@@ -1,5 +1,5 @@
 use tokio::{sync::mpsc::UnboundedSender, time};
-use tracing::{error, info};
+use tracing::{error, info, trace};
 
 use std::io;
 use std::mem;
@@ -38,7 +38,7 @@ pub fn run_input_handler(input_sender: UnboundedSender<String>) {
 
 pub async fn run_api_module(api_tx_sender: UnboundedSender<Transaction>) {
     if let Err(error) = launch_and_run_api_module(api_tx_sender).await {
-        eprintln!("API crashed: {:?}", error);
+        error!("API crashed: {:?}", error);
     }
 }
 
@@ -77,9 +77,14 @@ pub fn run_miner(app_state: Arc<Mutex<AppState>>, mined_block_sender: UnboundedS
 
         if let Some(new_block) = Block::new(block_id, prev_block_hash, transactions, cancel_mining)
         {
-            mined_block_sender.send(new_block.clone()).unwrap();
+            match mined_block_sender.send(new_block.clone()) {
+                Ok(_) => {
+                    last_block = Some(new_block);
 
-            last_block = Some(new_block);
+                    trace!("Mined block successfully sent to main thread");
+                }
+                Err(error) => error!("Error sending mined block to main thread: {:?}", error),
+            }
         }
     }
 }

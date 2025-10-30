@@ -15,7 +15,7 @@ pub fn init() -> Swarm<ChainBehaviour> {
         )
         .expect("failed to setup TCP swarm")
         .with_behaviour(|_| ChainBehaviour::new())
-        .expect("failed to setup node behaviour")
+        .expect("failed to setup node P2P behaviour")
         .with_swarm_config(|cfg| cfg)
         .build();
 
