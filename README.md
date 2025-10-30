@@ -71,6 +71,8 @@ Nodes automatically connect via `libp2p::Swarm`.
 It is possible to skip mining of the genesis block in all nodes which are launched after the very first one by setting
 up `MINE_GENESIS` environmental variable to `false` either in the `.env` file or as global environmental variable.
 
+It is also possible to configure API service host and port by modifying them in the `configuration.yaml` file.
+
 ------------------------------------------------------------------------------------------------------------------------
 
 ## 🧰 Tech Stack
