@@ -48,7 +48,7 @@ pub async fn submit_transaction(
 
     match api_tx_sender.0.send(transaction) {
         Err(error) => {
-            error!("Error while submitted transaction: {:?}", error);
+            error!("Error while submitting transaction: {:?}", error);
 
             Ok(HttpResponse::InternalServerError().finish())
         }
