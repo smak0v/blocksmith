@@ -88,9 +88,9 @@ It is also possible to configure API service host and port by modifying them in 
 
 ## 💬 Future Improvements
 
+✅ Implement changeable mining difficulty algorithm  
 ✅ Replace Proof-of-Work (PoW) algorithm with Proof-of-Stake (PoS) algorithm  
 ✅ Add persistent storage (LevelDB or RocksDB)  
 ✅ Implement peer reputation and bootstrapping for faster peers discovering  
 ✅ Implement enhanced block/transaction/chain validation  
-✅ Add WebSocket real-time event stream  
-✅ Improve errors handling
+✅ Add WebSocket real-time event stream

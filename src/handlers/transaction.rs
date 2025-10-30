@@ -1,5 +1,5 @@
-use libp2p::Swarm;
-use tracing::info;
+use libp2p::{Swarm, gossipsub::MessageId};
+use tracing::{error, info};
 
 use std::sync::{Arc, Mutex};
 
@@ -12,7 +12,14 @@ pub fn add_and_broadcast_transaction(
     app_state: Arc<Mutex<AppState>>,
     transaction: Transaction,
 ) {
-    let transaction_json = serde_json::to_string(&transaction).expect("cannot jsonify transaction");
+    let transaction_json = match serde_json::to_string(&transaction) {
+        Ok(transaction_json) => transaction_json,
+        Err(error) => {
+            error!("Failed to serialize transaction to broadcast: {:?}", error);
+
+            return;
+        }
+    };
 
     info!("Broadcasting new transaction: {:?}", &transaction);
 
@@ -22,21 +29,31 @@ pub fn add_and_broadcast_transaction(
 
     if app_state_lock.known_peers().len() > 0 {
         drop(app_state_lock);
-
         swarm
             .behaviour_mut()
             .gossipsub_behaviour
             .publish(ADD_TRANSACTION_TOPIC.clone(), transaction_json)
-            .unwrap();
+            .unwrap_or_else(|error| {
+                error!("Error while publishing transaction: {:?}", error);
+
+                MessageId(Vec::new())
+            });
     }
 }
 
 pub fn print_transactions(app_state: Arc<Mutex<AppState>>) {
-    let mut app_state_lock = app_state.lock().expect("poisoned mutex");
-    let local_transactions = serde_json::to_string_pretty(app_state_lock.transactions())
-        .expect("cannot jsonify local transactions");
+    let local_transactions = {
+        let mut app_state_lock = app_state.lock().expect("poisoned mutex");
 
-    drop(app_state_lock);
+        match serde_json::to_string_pretty(app_state_lock.transactions()) {
+            Ok(local_transactions) => local_transactions,
+            Err(error) => {
+                error!("Error serializing local transactions: {:?}", error);
+
+                return;
+            }
+        }
+    };
 
     info!("Local transactions:");
     info!("{}", local_transactions);

@@ -1,4 +1,5 @@
-use libp2p::Swarm;
+use libp2p::{Swarm, gossipsub::MessageId};
+use tracing::error;
 
 use crate::p2p::{
     CHAIN_TOPIC, ChainBehaviour, ChainResponse, PEER_ID, TRANSACTION_TOPIC, TransactionsResponse,
@@ -6,14 +7,24 @@ use crate::p2p::{
 
 pub fn send_local_chain(swarm: &mut Swarm<ChainBehaviour>, chain_response: ChainResponse) {
     if chain_response.receiver != PEER_ID.to_string() {
-        let chain_response_json =
-            serde_json::to_string(&chain_response).expect("cannot jsonify chain response");
+        let chain_response_json = match serde_json::to_string(&chain_response) {
+            Ok(chain_response_json) => chain_response_json,
+            Err(error) => {
+                error!("Error serializing local chain to JSON: {:?}", error);
+
+                return;
+            }
+        };
 
         swarm
             .behaviour_mut()
             .gossipsub_behaviour
             .publish(CHAIN_TOPIC.clone(), chain_response_json)
-            .expect("cannot publish chain");
+            .unwrap_or_else(|error| {
+                error!("Error while publishing local chain: {:?}", error);
+
+                MessageId(Vec::new())
+            });
     }
 }
 
@@ -22,13 +33,23 @@ pub fn send_local_transactions(
     transactions_response: TransactionsResponse,
 ) {
     if transactions_response.receiver != PEER_ID.to_string() {
-        let transactions_response_json = serde_json::to_string(&transactions_response)
-            .expect("cannot jsonify transactions response");
+        let transactions_response_json = match serde_json::to_string(&transactions_response) {
+            Ok(transactions_response_json) => transactions_response_json,
+            Err(error) => {
+                error!("Error serializing local transactions to JSON: {:?}", error);
+
+                return;
+            }
+        };
 
         swarm
             .behaviour_mut()
             .gossipsub_behaviour
             .publish(TRANSACTION_TOPIC.clone(), transactions_response_json)
-            .expect("cannot publish transactions");
+            .unwrap_or_else(|error| {
+                error!("Error while publishing local transactions: {:?}", error);
+
+                MessageId(Vec::new())
+            });
     }
 }
