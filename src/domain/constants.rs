@@ -1,7 +1,7 @@
 use std::env;
 use std::sync::LazyLock;
 
-const DEFAULT_DIFFICULTY_PREFIX: &'static str = "000";
+const DEFAULT_DIFFICULTY_PREFIX: &str = "000";
 
 pub static DIFFICULTY_PREFIX: LazyLock<String> = LazyLock::new(|| {
     let difficulty_prefix =

@@ -27,10 +27,12 @@ impl Application {
         api_tx_sender: UnboundedSender<Transaction>,
     ) -> Result<Self, Error> {
         let address = format!("{}:0", configuration.application.host);
-        let listener = TcpListener::bind(address.clone()).expect(&format!(
-            "failed to bind port {}",
-            configuration.application.port
-        ));
+        let listener = TcpListener::bind(address.clone()).unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                format!("failed to bind port {}", configuration.application.port)
+            );
+        });
         let port = listener.local_addr()?.port();
         let server = Application::run(listener, api_tx_sender)?;
 

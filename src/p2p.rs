@@ -16,7 +16,7 @@ use std::sync::LazyLock;
 use crate::domain::block::Block;
 use crate::domain::transaction::Transaction;
 
-pub static KEYS: LazyLock<Keypair> = LazyLock::new(|| Keypair::generate_ed25519());
+pub static KEYS: LazyLock<Keypair> = LazyLock::new(Keypair::generate_ed25519);
 pub static PEER_ID: LazyLock<PeerId> = LazyLock::new(|| PeerId::from(KEYS.public()));
 pub static TRANSACTION_TOPIC: LazyLock<Sha256Topic> = LazyLock::new(|| Sha256Topic::new("tx"));
 pub static ADD_TRANSACTION_TOPIC: LazyLock<Sha256Topic> = LazyLock::new(|| Sha256Topic::new("atx"));

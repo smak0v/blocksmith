@@ -123,7 +123,7 @@ impl Chain {
                 *block.nonce(),
             );
 
-            if block_hash == None || hex::encode(block_hash.unwrap()) != *block.hash() {
+            if block_hash.is_none() || hex::encode(block_hash.unwrap()) != *block.hash() {
                 warn!("Block with id {} has invalid hash", block.id());
 
                 false

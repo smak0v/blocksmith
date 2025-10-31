@@ -107,10 +107,7 @@ impl Block {
             }
 
             let hex_hash =
-                match Block::calculate_hash(id, previous_hash, timestamp, transactions, nonce) {
-                    Some(hash) => hash,
-                    None => return None,
-                };
+                Block::calculate_hash(id, previous_hash, timestamp, transactions, nonce)?;
             let binary_hash = helpers::hex_to_binary(&hex_hash);
 
             if binary_hash.starts_with::<&str>(DIFFICULTY_PREFIX.as_ref()) {
