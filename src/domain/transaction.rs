@@ -83,3 +83,16 @@ impl Transaction {
         Message::from_digest(Sha256Hash::hash(data.to_string().as_bytes()).to_byte_array())
     }
 }
+
+impl Default for Transaction {
+    fn default() -> Self {
+        Self::new(
+            "0x0000000000000000000000000000000000000000",
+            "0x0000000000000000000000000000000000000000",
+            0,
+            "Genesis Block",
+            0,
+            "",
+        )
+    }
+}

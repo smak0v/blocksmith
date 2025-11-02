@@ -1,11 +1,7 @@
 use tracing::{error, warn};
 
-use std::collections::BTreeSet;
-use std::sync::{Arc, atomic::AtomicBool};
-
 use crate::domain::block::Block;
 use crate::domain::constants::DIFFICULTY_PREFIX;
-use crate::domain::transaction::Transaction;
 use crate::utils::helpers;
 
 #[derive(Debug)]
@@ -16,22 +12,8 @@ pub struct Chain {
 impl Chain {
     pub fn new(mine_genesis: bool) -> Self {
         if mine_genesis {
-            let genesis_block = Block::new(
-                0,
-                "0000000000000000000000000000000000000000000000000000000000000000",
-                BTreeSet::from([Transaction::new(
-                    "0x0000000000000000000000000000000000000000",
-                    "0x0000000000000000000000000000000000000000",
-                    0,
-                    "Genesis Block",
-                    0,
-                    "",
-                )]),
-                Arc::new(AtomicBool::new(false)),
-            );
-
             Self {
-                blocks: vec![genesis_block.unwrap()],
+                blocks: vec![Block::default()],
             }
         } else {
             Self { blocks: vec![] }

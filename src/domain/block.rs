@@ -125,3 +125,15 @@ impl Block {
         }
     }
 }
+
+impl Default for Block {
+    fn default() -> Self {
+        Self::new(
+            0,
+            "0000000000000000000000000000000000000000000000000000000000000000",
+            BTreeSet::from([Transaction::default()]),
+            Arc::new(AtomicBool::new(false)),
+        )
+        .unwrap()
+    }
+}

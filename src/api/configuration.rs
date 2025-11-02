@@ -4,6 +4,8 @@ use serde_aux::field_attributes::deserialize_number_from_string;
 
 use std::env;
 
+const DEFAULT_CONFIG_FILE: &str = "configuration.yaml";
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct Settings {
     pub application: ApplicationSettings,
@@ -19,7 +21,7 @@ pub struct ApplicationSettings {
 pub fn get_configuration() -> Result<Settings, ConfigError> {
     let base_path = env::current_dir().expect("failed to determine current directory");
     let settings = Config::builder()
-        .add_source(File::from(base_path.join("configuration.yaml")))
+        .add_source(File::from(base_path.join(DEFAULT_CONFIG_FILE)))
         .add_source(
             Environment::with_prefix("APP")
                 .prefix_separator("_")
