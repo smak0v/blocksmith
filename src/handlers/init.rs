@@ -1,3 +1,4 @@
+use anyhow::Result;
 use libp2p::Swarm;
 use tokio::time;
 use tracing::info;
@@ -10,7 +11,10 @@ use crate::app::AppState;
 use crate::handlers::peers as peers_handlers;
 use crate::p2p::{CHAIN_TOPIC, ChainBehaviour, Request, TRANSACTION_TOPIC};
 
-pub async fn init_node(swarm: &mut Swarm<ChainBehaviour>, app_state: Arc<Mutex<AppState>>) {
+pub async fn init_node(
+    swarm: &mut Swarm<ChainBehaviour>,
+    app_state: Arc<Mutex<AppState>>,
+) -> Result<()> {
     let mut peers = peers_handlers::get_peers(app_state.clone());
     let initialized = { app_state.lock().expect("poisoned mutex").initialized };
 
@@ -56,4 +60,6 @@ pub async fn init_node(swarm: &mut Swarm<ChainBehaviour>, app_state: Arc<Mutex<A
     }
 
     app_state.lock().expect("poisoned mutex").initialized = true;
+
+    Ok(())
 }

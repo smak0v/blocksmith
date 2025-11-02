@@ -1,3 +1,4 @@
+use anyhow::Result;
 use libp2p::{Multiaddr, PeerId, Swarm};
 use tracing::{info, warn};
 
@@ -6,7 +7,7 @@ use crate::p2p::ChainBehaviour;
 pub fn process_mdns_discovered_event(
     swarm: &mut Swarm<ChainBehaviour>,
     discovered_peers: Vec<(PeerId, Multiaddr)>,
-) {
+) -> Result<()> {
     info!("MDNS discovered peers: {:?}", discovered_peers);
 
     for (peer, ..) in discovered_peers {
@@ -22,12 +23,14 @@ pub fn process_mdns_discovered_event(
             Err(error) => warn!("Failed to dial peer {}: {}", peer, error),
         }
     }
+
+    Ok(())
 }
 
 pub fn process_mdns_expired_peers(
     swarm: &mut Swarm<ChainBehaviour>,
     expired_peers: Vec<(PeerId, Multiaddr)>,
-) {
+) -> Result<()> {
     info!("MDNS expired peers: {:?}", expired_peers);
 
     for (peer, ..) in &expired_peers {
@@ -44,4 +47,6 @@ pub fn process_mdns_expired_peers(
                 .remove_explicit_peer(peer);
         }
     }
+
+    Ok(())
 }

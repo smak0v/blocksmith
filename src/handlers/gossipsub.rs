@@ -1,7 +1,8 @@
+use anyhow::{Context, Result};
 use libp2p::PeerId;
 use secp256k1::PublicKey;
 use tokio::sync::mpsc::UnboundedSender;
-use tracing::{error, info, warn};
+use tracing::{info, warn};
 
 use std::str::FromStr;
 use std::sync::{Arc, Mutex, atomic::Ordering};
@@ -15,7 +16,7 @@ pub fn process_chain_response_message(
     app_state: Arc<Mutex<AppState>>,
     chain_response: ChainResponse,
     sender: PeerId,
-) {
+) -> Result<()> {
     if chain_response.receiver == PEER_ID.to_string() {
         info!("Chain response received from: {}", sender);
         info!("Received chain length: {}", chain_response.blocks.len());
@@ -30,6 +31,8 @@ pub fn process_chain_response_message(
             *app_state_lock.chain().blocks() = chain
         }
     }
+
+    Ok(())
 }
 
 pub fn process_local_chain_request_message(
@@ -37,25 +40,28 @@ pub fn process_local_chain_request_message(
     local_chain_request: Request,
     requestor: PeerId,
     chain_response_sender: UnboundedSender<ChainResponse>,
-) {
+) -> Result<()> {
     if local_chain_request.from_peer_id == PEER_ID.to_string() {
         info!("Sending local chain to: {}", requestor);
 
         let mut app_state_lock = app_state.lock().expect("poisoned mutex");
 
-        if let Err(error) = chain_response_sender.send(ChainResponse {
-            blocks: app_state_lock.chain().blocks().clone(),
-            receiver: requestor.to_string(),
-        }) {
-            error!(
-                "Error sending local chain response via channel, {:?}",
-                error
-            );
-        }
+        chain_response_sender
+            .send(ChainResponse {
+                blocks: app_state_lock.chain().blocks().clone(),
+                receiver: requestor.to_string(),
+            })
+            .context("failed to send local chain response via channel")?;
     }
+
+    Ok(())
 }
 
-pub fn process_block_message(app_state: Arc<Mutex<AppState>>, block: Block, sender: PeerId) {
+pub fn process_block_message(
+    app_state: Arc<Mutex<AppState>>,
+    block: Block,
+    sender: PeerId,
+) -> Result<()> {
     info!(
         "Received new block with hash {} from: {}",
         block.hash(),
@@ -74,13 +80,15 @@ pub fn process_block_message(app_state: Arc<Mutex<AppState>>, block: Block, send
 
         info!("Mining cancelled due to new block arrival");
     }
+
+    Ok(())
 }
 
 pub fn process_transactions_response_message(
     app_state: Arc<Mutex<AppState>>,
     transactions_response: TransactionsResponse,
     sender: PeerId,
-) {
+) -> Result<()> {
     if transactions_response.receiver == PEER_ID.to_string() {
         info!("Transactions response received from: {}", sender);
         info!(
@@ -101,6 +109,8 @@ pub fn process_transactions_response_message(
                 }
             });
     }
+
+    Ok(())
 }
 
 pub fn process_local_transactions_request_message(
@@ -108,29 +118,28 @@ pub fn process_local_transactions_request_message(
     local_transactions_request: Request,
     requestor: PeerId,
     transactions_response_sender: UnboundedSender<TransactionsResponse>,
-) {
+) -> Result<()> {
     if local_transactions_request.from_peer_id == PEER_ID.to_string() {
         info!("Sending local transactions to: {}", requestor);
 
         let mut app_state_lock = app_state.lock().expect("poisoned mutex");
 
-        if let Err(error) = transactions_response_sender.send(TransactionsResponse {
-            transactions: app_state_lock.transactions().clone(),
-            receiver: requestor.to_string(),
-        }) {
-            error!(
-                "Error sending local transactions response via channel, {:?}",
-                error
-            );
-        }
+        transactions_response_sender
+            .send(TransactionsResponse {
+                transactions: app_state_lock.transactions().clone(),
+                receiver: requestor.to_string(),
+            })
+            .context("failed to send local transactions response via channel")?;
     }
+
+    Ok(())
 }
 
 pub fn process_transaction_message(
     app_state: Arc<Mutex<AppState>>,
     transaction: Transaction,
     sender: PeerId,
-) {
+) -> Result<()> {
     info!("Received new transaction from: {}", sender);
 
     if transaction.verify(&PublicKey::from_str(transaction.from()).expect("invalid public key")) {
@@ -140,4 +149,6 @@ pub fn process_transaction_message(
     } else {
         warn!("Received invalid transaction: {:?}", transaction);
     }
+
+    Ok(())
 }

@@ -1,5 +1,6 @@
-use libp2p::{Swarm, gossipsub::MessageId};
-use tracing::{error, info};
+use anyhow::{Context, Result};
+use libp2p::Swarm;
+use tracing::info;
 
 use std::sync::{Arc, Mutex};
 
@@ -11,49 +12,33 @@ pub fn add_and_broadcast_block(
     swarm: &mut Swarm<ChainBehaviour>,
     app_state: Arc<Mutex<AppState>>,
     block: Block,
-) {
-    let block_json = match serde_json::to_string(&block) {
-        Ok(block_json) => block_json,
-        Err(error) => {
-            error!("Failed to serialize block to broadcast: {:?}", error);
-
-            return;
-        }
-    };
-    let remove_transactions_json = match serde_json::to_string(block.transactions()) {
-        Ok(remove_transactions_json) => remove_transactions_json,
-        Err(error) => {
-            error!("Failed to serialize transactions to remove: {:?}", error);
-
-            return;
-        }
-    };
+) -> Result<()> {
+    let block_json = serde_json::to_string(&block)
+        .context("failed to serialize block to JSON for broadcasting")?;
+    let remove_transactions_json = serde_json::to_string(block.transactions())
+        .context("failed to serialize block.transactions() to JSON for broadcasting")?;
 
     info!("Broadcasting new block with id: {}", *block.id());
 
     let mut app_state_lock = app_state.lock().expect("poisoned mutex");
+    let should_publish = !app_state_lock.known_peers().is_empty();
 
     app_state_lock.chain().blocks().push(block);
 
-    if app_state_lock.known_peers().len() > 0 {
-        drop(app_state_lock);
+    drop(app_state_lock);
+
+    if should_publish {
         swarm
             .behaviour_mut()
             .gossipsub_behaviour
             .publish(BLOCK_TOPIC.clone(), block_json)
-            .unwrap_or_else(|error| {
-                error!("Error while publishing block: {:?}", error);
-
-                MessageId(Vec::new())
-            });
+            .context("failed to publish block over gossipsub")?;
         swarm
             .behaviour_mut()
             .gossipsub_behaviour
             .publish(REMOVE_TRANSACTION_TOPIC.clone(), remove_transactions_json)
-            .unwrap_or_else(|error| {
-                error!("Error while publishing transactions to remove: {:?}", error);
-
-                MessageId(Vec::new())
-            });
+            .context("failed to publish transactions to remove over gossipsub")?;
     }
+
+    Ok(())
 }

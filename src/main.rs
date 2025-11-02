@@ -13,7 +13,7 @@ use libp2p::{
     swarm::SwarmEvent,
 };
 use tokio::{select, sync::mpsc::UnboundedSender, task};
-use tracing::info;
+use tracing::{error, info};
 
 use std::sync::{Arc, Mutex};
 
@@ -136,28 +136,26 @@ async fn process_event(
     event: Option<EventType>,
 ) {
     if let Some(event) = event {
-        match event {
+        let result = match event {
             EventType::Init => init_handlers::init_node(swarm, app_state).await,
-            EventType::Input(input) => {
-                input_handlers::process_input(app_state, input.as_ref());
-            }
+            EventType::Input(input) => input_handlers::process_input(app_state, input.as_ref()),
             EventType::LocalChainResponse(chain_response) => {
-                response_handlers::send_local_chain(swarm, chain_response);
+                response_handlers::send_local_chain(swarm, chain_response)
             }
             EventType::LocalTransactionsResponse(transactions_response) => {
-                response_handlers::send_local_transactions(swarm, transactions_response);
+                response_handlers::send_local_transactions(swarm, transactions_response)
             }
             EventType::MinedBlock(mined_block) => {
-                block_handlers::add_and_broadcast_block(swarm, app_state, mined_block);
+                block_handlers::add_and_broadcast_block(swarm, app_state, mined_block)
             }
             EventType::TransactionSubmitted(transaction) => {
-                transaction_handlers::add_and_broadcast_transaction(swarm, app_state, transaction);
+                transaction_handlers::add_and_broadcast_transaction(swarm, app_state, transaction)
             }
             EventType::Mdns(MdnsEvent::Discovered(discovered_peers)) => {
-                mdns_handlers::process_mdns_discovered_event(swarm, discovered_peers);
+                mdns_handlers::process_mdns_discovered_event(swarm, discovered_peers)
             }
             EventType::Mdns(MdnsEvent::Expired(expired_peers)) => {
-                mdns_handlers::process_mdns_expired_peers(swarm, expired_peers);
+                mdns_handlers::process_mdns_expired_peers(swarm, expired_peers)
             }
             EventType::Gossipsub(GossipsubEvent::Message {
                 propagation_source,
@@ -169,7 +167,7 @@ async fn process_event(
                         app_state,
                         chain_response,
                         propagation_source,
-                    );
+                    )
                 } else if let Ok(request) = serde_json::from_slice::<Request>(&message.data) {
                     if request.topic == CHAIN_TOPIC.to_string() {
                         gossipsub_handlers::process_local_chain_request_message(
@@ -177,14 +175,14 @@ async fn process_event(
                             request,
                             propagation_source,
                             senders.0,
-                        );
+                        )
                     } else {
                         gossipsub_handlers::process_local_transactions_request_message(
                             app_state,
                             request,
                             propagation_source,
                             senders.1,
-                        );
+                        )
                     }
                 } else if let Ok(transactions_response) =
                     serde_json::from_slice::<TransactionsResponse>(&message.data)
@@ -193,19 +191,27 @@ async fn process_event(
                         app_state,
                         transactions_response,
                         propagation_source,
-                    );
+                    )
                 } else if let Ok(transaction) = serde_json::from_slice::<Transaction>(&message.data)
                 {
                     gossipsub_handlers::process_transaction_message(
                         app_state,
                         transaction,
                         propagation_source,
-                    );
+                    )
                 } else if let Ok(block) = serde_json::from_slice::<Block>(&message.data) {
-                    gossipsub_handlers::process_block_message(app_state, block, propagation_source);
+                    gossipsub_handlers::process_block_message(app_state, block, propagation_source)
+                } else {
+                    Ok(())
                 }
             }
-            _ => {}
+            _ => Ok(()),
+        };
+
+        if let Err(error) = result {
+            error!("Error encountered during the event processing: {:?}", error);
+
+            return;
         }
     }
 }

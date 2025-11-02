@@ -1,55 +1,42 @@
-use libp2p::{Swarm, gossipsub::MessageId};
-use tracing::error;
+use anyhow::{Context, Result};
+use libp2p::Swarm;
 
 use crate::p2p::{
     CHAIN_TOPIC, ChainBehaviour, ChainResponse, PEER_ID, TRANSACTION_TOPIC, TransactionsResponse,
 };
 
-pub fn send_local_chain(swarm: &mut Swarm<ChainBehaviour>, chain_response: ChainResponse) {
+pub fn send_local_chain(
+    swarm: &mut Swarm<ChainBehaviour>,
+    chain_response: ChainResponse,
+) -> Result<()> {
     if chain_response.receiver != PEER_ID.to_string() {
-        let chain_response_json = match serde_json::to_string(&chain_response) {
-            Ok(chain_response_json) => chain_response_json,
-            Err(error) => {
-                error!("Error serializing local chain to JSON: {:?}", error);
-
-                return;
-            }
-        };
+        let chain_response_json = serde_json::to_string(&chain_response)
+            .context("failed to serialize local chain to JSON for broadcasting")?;
 
         swarm
             .behaviour_mut()
             .gossipsub_behaviour
             .publish(CHAIN_TOPIC.clone(), chain_response_json)
-            .unwrap_or_else(|error| {
-                error!("Error while publishing local chain: {:?}", error);
-
-                MessageId(Vec::new())
-            });
+            .context("failed to publish local chain over gossipsub")?;
     }
+
+    Ok(())
 }
 
 pub fn send_local_transactions(
     swarm: &mut Swarm<ChainBehaviour>,
     transactions_response: TransactionsResponse,
-) {
+) -> Result<()> {
     if transactions_response.receiver != PEER_ID.to_string() {
-        let transactions_response_json = match serde_json::to_string(&transactions_response) {
-            Ok(transactions_response_json) => transactions_response_json,
-            Err(error) => {
-                error!("Error serializing local transactions to JSON: {:?}", error);
-
-                return;
-            }
-        };
+        let transactions_response_json = serde_json::to_string(&transactions_response)
+            .context("failed to serialize local transactions to JSON for broadcasting")?;
 
         swarm
             .behaviour_mut()
             .gossipsub_behaviour
             .publish(TRANSACTION_TOPIC.clone(), transactions_response_json)
-            .unwrap_or_else(|error| {
-                error!("Error while publishing local transactions: {:?}", error);
-
-                MessageId(Vec::new())
-            });
+            .context("failed to publish local transactions over gossipsub")?;
     }
+
+    Ok(())
 }
