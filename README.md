@@ -97,6 +97,6 @@ It is also possible to configure API service host and port by modifying them in 
 ✅ Add persistent storage (LevelDB or RocksDB)  
 ✅ Implement peer reputation and bootstrapping for faster peers discovering  
 ✅ Implement enhanced block/transaction/chain validation  
-✅ Add WebSocket real-time event stream
+✅ Add WebSocket real-time event stream  
 ✅ Implement block size limit  
 ✅ Implement cryptocurrency minting, tokenomics and add mining rewards  
