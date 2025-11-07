@@ -1,0 +1,130 @@
+use tracing::{error, warn};
+
+use crate::domain::block::Block;
+use crate::domain::constants::DIFFICULTY_PREFIX;
+use crate::utils::helpers;
+
+#[derive(Debug)]
+pub struct Chain {
+    blocks: Vec<Block>,
+}
+
+impl Chain {
+    pub fn new(mine_genesis: bool) -> Self {
+        if mine_genesis {
+            Self {
+                blocks: vec![Block::default()],
+            }
+        } else {
+            Self { blocks: vec![] }
+        }
+    }
+
+    pub fn blocks(&mut self) -> &mut Vec<Block> {
+        &mut self.blocks
+    }
+
+    pub fn try_add_block(&mut self, block: Block) -> bool {
+        let prev_block = match self.blocks.last() {
+            Some(block) => block,
+            None => {
+                error!("Chain is empty");
+
+                return false;
+            }
+        };
+
+        if self.is_block_valid(&block, prev_block) {
+            self.blocks.push(block);
+
+            true
+        } else {
+            error!("Invalid block: {:?}", block);
+
+            false
+        }
+    }
+
+    pub fn choose_chain(&mut self, local: Vec<Block>, remote: Vec<Block>) -> Option<Vec<Block>> {
+        let is_local_valid = self.is_chain_valid(&local);
+        let is_remote_valid = self.is_chain_valid(&remote);
+
+        if is_local_valid && is_remote_valid {
+            if remote.len() >= local.len() {
+                Some(remote)
+            } else {
+                Some(local)
+            }
+        } else if is_remote_valid && !is_local_valid {
+            Some(remote)
+        } else if !is_remote_valid && is_local_valid {
+            Some(local)
+        } else {
+            error!("Local and remote chains are both invalid");
+
+            None
+        }
+    }
+
+    fn is_block_valid(&self, block: &Block, prev_block: &Block) -> bool {
+        if *block.id() != *prev_block.id() + 1 {
+            warn!(
+                "Block with id {} is not the next block after the latest {}",
+                block.id(),
+                prev_block.id()
+            );
+
+            false
+        } else if block.prev_hash() != prev_block.hash() {
+            warn!("Block with id {} has wrong previous hash", block.id());
+
+            false
+        } else {
+            match hex::decode(block.hash()) {
+                Ok(decoded_hash) => {
+                    if !helpers::hex_to_binary(&decoded_hash)
+                        .starts_with::<&str>(DIFFICULTY_PREFIX.as_ref())
+                    {
+                        warn!("Block with id {} has invalid difficulty", block.id());
+
+                        return false;
+                    }
+                }
+                Err(error) => {
+                    error!("Error decoding block hash: {:?}", error);
+
+                    return false;
+                }
+            }
+
+            let block_hash = Block::calculate_hash(
+                *block.id(),
+                block.prev_hash(),
+                *block.timestamp(),
+                block.transactions(),
+                *block.nonce(),
+            );
+
+            if block_hash.is_none() || hex::encode(block_hash.unwrap()) != *block.hash() {
+                warn!("Block with id {} has invalid hash", block.id());
+
+                false
+            } else {
+                true
+            }
+        }
+    }
+
+    fn is_chain_valid(&self, chain: &[Block]) -> bool {
+        for i in 1..chain.len() {
+            let first = chain.get(i - 1).expect("has to exist");
+            let second = chain.get(i).expect("has to exist");
+
+            if !self.is_block_valid(second, first) {
+                return false;
+            }
+        }
+
+        true
+    }
+}
